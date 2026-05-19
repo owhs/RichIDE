@@ -5,7 +5,6 @@ CodeBox is an advanced, modular, event-driven Rich Text Editor control for AutoH
 ## Features at a Glance
 - Syntax Highlighting for multiple languages (AHK, JS, Python, C#, HTML, XML, CSS, etc.)
 - Theme Support (Dark/Light mode with easy color extensibility)
-- Minimap (Code overview)
 - Line Numbers & Gutter
 - Code Folding
 - Auto-completion & Smart Typing
@@ -35,14 +34,12 @@ Integrating CodeBox into your AutoHotkey v2 project is incredibly straightforwar
 ; Include desired plugins
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Highlighter.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_LineNumbers.ahk"
-#Include "%A_ScriptDir%\lib\Plugins\CodeBox_Minimap.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_SmartTyping.ahk"
 ; ... include others as needed
 
 ; Register Plugins
 CodeBox.RegisterPlugin("Highlighter", CodeBox_Highlighter)
 CodeBox.RegisterPlugin("LineNumbers", CodeBox_LineNumbers)
-CodeBox.RegisterPlugin("Minimap", CodeBox_Minimap)
 CodeBox.RegisterPlugin("SmartTyping", CodeBox_SmartTyping)
 
 ; Create GUI and Add CodeBox
@@ -59,11 +56,10 @@ MyGui.Show("w820 h620")
 CodeBox's power comes entirely from its plugins. The core is extremely lightweight. Below is the functionality provided by the existing plugin suite:
 
 *   **`CodeBox_Highlighter`**: The core syntax highlighting engine. Parses code using Regular Expressions defined in `CodeBox_Data.ahk` and colorizes the rich text control asynchronously to avoid UI blocking.
-*   **`CodeBox_Theming`**: Manages the application of color palettes across the main editor, minimap, line numbers, and other UI elements.
+*   **`CodeBox_Theming`**: Manages the application of color palettes across the main editor, line numbers, and other UI elements.
 *   **`CodeBox_Selection`**: Enhances text selection, handling visual highlights for double-clicks, line selection, and ensuring smooth rendering during drag operations.
 *   **`CodeBox_Scrollbars`**: Replaces the native Windows scrollbars with custom, theme-aware, smooth-scrolling scrollbars that seamlessly integrate into the editor UI.
 *   **`CodeBox_LineNumbers`**: Injects a gutter to the left of the editor, accurately computing text wrapping and zooming to display synchronized line numbers.
-*   **`CodeBox_Minimap`**: A VSCode/Sublime-style miniature code overview on the right side of the editor. Synchronizes scroll position and mirrors syntax highlighting.
 *   **`CodeBox_Folding`**: Enables collapsing and expanding of code blocks (e.g., classes, functions, or brace-enclosed regions) by clicking in the gutter or using keyboard shortcuts.
 *   **`CodeBox_History`**: A robust Undo/Redo stack that saves editor states (text and selection ranges) intelligently, completely replacing the standard Windows rich edit history.
 *   **`CodeBox_Suggest`**: Auto-complete and suggestion popup engine. Listens to typed characters and displays relevant keywords or variable names based on the current context.
