@@ -1,0 +1,79 @@
+class CodeBox_ClipboardManager {
+    static OnRegisterMenu(ctrl, fileMenu, editMenu, viewMenu, toolsMenu) {
+        editMenu.Add("Include Hidden in Copy", (ItemName, ItemPos, MyMenu) => (
+            ctrl.CopyHidden := !ctrl.CopyHidden,
+            MyMenu.ToggleCheck(ItemName)
+        ))
+    }
+    static OnDisable(ctrl) {
+        if this.HasProp("ToolbarChk")
+            this.ToolbarChk.Visible := false
+    }
+    static OnEnable(ctrl) {
+        if this.HasProp("ToolbarChk")
+            this.ToolbarChk.Visible := true
+    }
+
+    static OnKeyDown(ctrl, wParam) {
+        if ((wParam == 67 || wParam == 88) && GetKeyState("Ctrl") && ctrl.HasProp("CopyHidden") && !ctrl.CopyHidden) {
+            cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
+            startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+            
+            if (startSel == endSel)
+                return 0
+
+            visText := this.GetVisibleText(ctrl, startSel, endSel)
+            visText := StrReplace(StrReplace(visText, "`r`n", "`n"), "`r", "`n")
+            A_Clipboard := StrReplace(visText, "`n", "`r`n")
+            
+            if (wParam == 88) {
+                CodeBox._InsertText(ctrl.Hwnd, "")
+            }
+            return 1
+        }
+        return 0
+    }
+
+    static GetVisibleText(ctrl, startSel, endSel) {
+        SendMessage(0x000B, 0, 0, ctrl.Hwnd)
+        cf2 := Buffer(116, 0)
+        
+        fullText := CodeBox._GetTextRange(ctrl.Hwnd, startSel, endSel)
+        out := ""
+        
+        i := startSel
+        strIdx := 1
+        while (i < endSel) {
+            chunkEnd := Min(i + 64, endSel)
+            
+            NumPut("UInt", 116, cf2, 0)
+            CodeBox._SetSel(ctrl.Hwnd, i, chunkEnd)
+            SendMessage(0x043A, 1, cf2.Ptr, ctrl.Hwnd)
+            
+            if (NumGet(cf2, 4, "UInt") & 0x0100) {
+                len := chunkEnd - i
+                if !(NumGet(cf2, 8, "UInt") & 0x0100)
+                    out .= SubStr(fullText, strIdx, len)
+                i := chunkEnd
+                strIdx += len
+                continue
+            }
+            
+            j := i
+            while (j < chunkEnd) {
+                NumPut("UInt", 116, cf2, 0)
+                CodeBox._SetSel(ctrl.Hwnd, j, j + 1)
+                SendMessage(0x043A, 1, cf2.Ptr, ctrl.Hwnd)
+                if !(NumGet(cf2, 8, "UInt") & 0x0100)
+                    out .= SubStr(fullText, strIdx, 1)
+                j++
+                strIdx++
+            }
+            i := chunkEnd
+        }
+        
+        CodeBox._SetSel(ctrl.Hwnd, startSel, endSel)
+        SendMessage(0x000B, 1, 0, ctrl.Hwnd)
+        return out
+    }
+}
