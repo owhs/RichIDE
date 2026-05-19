@@ -12,6 +12,9 @@ class CodeBox_History {
     }
 
     static OnKeyDown(ctrl, wParam) {
+        if (ctrl.HasProp("IsPreviewing") && ctrl.IsPreviewing)
+            return 0
+
         if (wParam == 90 && GetKeyState("Ctrl", "P")) {
             this.Undo(ctrl)
             return 1
@@ -24,6 +27,9 @@ class CodeBox_History {
     }
 
     static PushHistory(ctrl, action := "Edit", text := "", selStart := -1, selEnd := -1) {
+        if (ctrl.HasProp("IsPreviewing") && ctrl.IsPreviewing)
+            return
+
         if !ctrl.HasProp("History") {
             ctrl.History := []
             ctrl.HistoryIndex := 0

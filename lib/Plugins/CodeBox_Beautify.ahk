@@ -12,6 +12,9 @@ class CodeBox_Beautify {
     }
 
     static OnKeyDown(ctrl, wParam) {
+        if (ctrl.HasProp("IsPreviewing") && ctrl.IsPreviewing)
+            return 0
+
         if (wParam == 70 && GetKeyState("Ctrl", "P") && GetKeyState("Shift", "P")) {
             this.Format(ctrl)
             return 1

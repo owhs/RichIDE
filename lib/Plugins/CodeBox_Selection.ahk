@@ -14,8 +14,56 @@ class CodeBox_Selection {
         this._OrigGetSysColor := DllCall("GetProcAddress", "Ptr", DllCall("GetModuleHandle", "Str", "USER32.dll", "Ptr"), "AStr", "GetSysColor", "Ptr")
         this._OrigGetSysColorBrush := DllCall("GetProcAddress", "Ptr", DllCall("GetModuleHandle", "Str", "USER32.dll", "Ptr"), "AStr", "GetSysColorBrush", "Ptr")
 
-        this._GetSysColorCB := CallbackCreate(ObjBindMethod(this, "_GetSysColorHook"), "Fast", 1)
-        this._GetSysColorBrushCB := CallbackCreate(ObjBindMethod(this, "_GetSysColorBrushHook"), "Fast", 1)
+        _GetSysColorHook(nIndex) {
+            try {
+                if (!CodeBox.IsPluginEnabled("Selection"))
+                    return DllCall(CodeBox_Selection._OrigGetSysColor, "Int", nIndex, "UInt")
+
+                if (nIndex == 13 || nIndex == 14) {
+                    ctrl := CodeBox_Selection._GetActiveCtrl()
+                    if (IsObject(ctrl)) {
+                        themeName := (HasProp(ctrl, "CodeBoxTheme") && CodeBox.Themes.Has(ctrl.CodeBoxTheme)) ? ctrl.CodeBoxTheme : "Dark"
+                        theme := CodeBox.Themes[themeName]
+
+                        if (nIndex == 13 && theme.Has("SelectionBg")) {
+                            return CodeBox_Selection.RGBtoBGR(theme["SelectionBg"])
+                        }
+                        if (nIndex == 14 && theme.Has("SelectionFg")) {
+                            return CodeBox_Selection.RGBtoBGR(theme["SelectionFg"])
+                        }
+                    }
+                }
+            }
+            return DllCall(CodeBox_Selection._OrigGetSysColor, "Int", nIndex, "UInt")
+        }
+
+        _GetSysColorBrushHook(nIndex) {
+            try {
+                if (!CodeBox.IsPluginEnabled("Selection"))
+                    return DllCall(CodeBox_Selection._OrigGetSysColorBrush, "Int", nIndex, "Ptr")
+
+                if (nIndex == 13 || nIndex == 14) {
+                    ctrl := CodeBox_Selection._GetActiveCtrl()
+                    if (IsObject(ctrl)) {
+                        themeName := (HasProp(ctrl, "CodeBoxTheme") && CodeBox.Themes.Has(ctrl.CodeBoxTheme)) ? ctrl.CodeBoxTheme : "Dark"
+                        theme := CodeBox.Themes[themeName]
+
+                        colorRGB := (nIndex == 13 && theme.Has("SelectionBg")) ? theme["SelectionBg"] : ((nIndex == 14 && theme.Has("SelectionFg")) ? theme["SelectionFg"] : -1)
+
+                        if (colorRGB != -1) {
+                            bgr := CodeBox_Selection.RGBtoBGR(colorRGB)
+                            if !CodeBox_Selection._Brushes.Has(bgr)
+                                CodeBox_Selection._Brushes[bgr] := DllCall("Gdi32.dll\CreateSolidBrush", "UInt", bgr, "Ptr")
+                            return CodeBox_Selection._Brushes[bgr]
+                        }
+                    }
+                }
+            }
+            return DllCall(CodeBox_Selection._OrigGetSysColorBrush, "Int", nIndex, "Ptr")
+        }
+
+        this._GetSysColorCB := CallbackCreate(_GetSysColorHook, "Fast", 1)
+        this._GetSysColorBrushCB := CallbackCreate(_GetSysColorBrushHook, "Fast", 1)
 
         this._HookIAT(hMod, "GetSysColor", this._GetSysColorCB)
         this._HookIAT(hMod, "GetSysColorBrush", this._GetSysColorBrushCB)
@@ -38,48 +86,6 @@ class CodeBox_Selection {
             return CodeBox._SubCtrls[hwnd]
 
         return this._LastActiveCtrl
-    }
-
-    static _GetSysColorHook(nIndex, *) {
-        if (!CodeBox.IsPluginEnabled("Selection"))
-            return DllCall(this._OrigGetSysColor, "Int", nIndex, "UInt")
-
-        if (nIndex == 13 || nIndex == 14) {
-            ctrl := this._GetActiveCtrl()
-            if (ctrl) {
-                themeName := CodeBox.Themes.Has(ctrl.CodeBoxTheme) ? ctrl.CodeBoxTheme : "Dark"
-                theme := CodeBox.Themes[themeName]
-
-                if (nIndex == 13 && theme.Has("SelectionBg"))
-                    return this.RGBtoBGR(theme["SelectionBg"])
-                if (nIndex == 14 && theme.Has("SelectionFg"))
-                    return this.RGBtoBGR(theme["SelectionFg"])
-            }
-        }
-        return DllCall(this._OrigGetSysColor, "Int", nIndex, "UInt")
-    }
-
-    static _GetSysColorBrushHook(nIndex, *) {
-        if (!CodeBox.IsPluginEnabled("Selection"))
-            return DllCall(this._OrigGetSysColorBrush, "Int", nIndex, "Ptr")
-
-        if (nIndex == 13 || nIndex == 14) {
-            ctrl := this._GetActiveCtrl()
-            if (ctrl) {
-                themeName := CodeBox.Themes.Has(ctrl.CodeBoxTheme) ? ctrl.CodeBoxTheme : "Dark"
-                theme := CodeBox.Themes[themeName]
-
-                colorRGB := (nIndex == 13 && theme.Has("SelectionBg")) ? theme["SelectionBg"] : ((nIndex == 14 && theme.Has("SelectionFg")) ? theme["SelectionFg"] : -1)
-
-                if (colorRGB != -1) {
-                    bgr := this.RGBtoBGR(colorRGB)
-                    if !this._Brushes.Has(bgr)
-                        this._Brushes[bgr] := DllCall("Gdi32.dll\CreateSolidBrush", "UInt", bgr, "Ptr")
-                    return this._Brushes[bgr]
-                }
-            }
-        }
-        return DllCall(this._OrigGetSysColorBrush, "Int", nIndex, "Ptr")
     }
 
     static _HookIAT(hModule, targetFunction, hookCallback) {

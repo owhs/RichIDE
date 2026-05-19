@@ -607,17 +607,22 @@ class CodeBox {
         bgr := ((colorRGB & 0xFF0000) >> 16) | (colorRGB & 0x00FF00) | ((colorRGB & 0x0000FF) << 16)
         cf2 := Buffer(116, 0), NumPut("UInt", 116, cf2, 0)
         mask := 0x40000000 | 0x00000001 | 0x00000004
-        if (backColorRGB != -1)
-            mask |= 0x04000000 ; CFM_BACKCOLOR
-            
         effects := (bold ? 1 : 0) | (underline ? 4 : 0)
-        NumPut("UInt", mask, cf2, 4), NumPut("UInt", effects, cf2, 8), NumPut("UInt", bgr, cf2, 20)
         
         if (backColorRGB != -1) {
-            bgBgr := ((backColorRGB & 0xFF0000) >> 16) | (backColorRGB & 0x00FF00) | ((backColorRGB & 0x0000FF) << 16)
-            NumPut("UInt", bgBgr, cf2, 104) ; crBackColor
+            mask |= 0x04000000 ; CFM_BACKCOLOR
+            if (backColorRGB == -2) {
+                effects |= 0x04000000 ; CFE_AUTOBACKCOLOR
+            } else {
+                bgBgr := ((backColorRGB & 0xFF0000) >> 16) | (backColorRGB & 0x00FF00) | ((backColorRGB & 0x0000FF) << 16)
+                NumPut("UInt", bgBgr, cf2, 96) ; crBackColor (Offset 96 due to 4-byte struct alignment in Unicode CHARFORMAT2)
+            }
+        } else if (isDefault) {
+            mask |= 0x04000000 ; CFM_BACKCOLOR
+            effects |= 0x04000000 ; CFE_AUTOBACKCOLOR
         }
-        
+            
+        NumPut("UInt", mask, cf2, 4), NumPut("UInt", effects, cf2, 8), NumPut("UInt", bgr, cf2, 20)
         SendMessage(0x0444, isDefault ? 4 : 1, cf2.Ptr, hwnd)
     }
 

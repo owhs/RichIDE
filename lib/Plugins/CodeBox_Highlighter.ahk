@@ -75,6 +75,7 @@ class CodeBox_Highlighter {
 
             CodeBox._SetSel(hwnd, 0, -1)
             CodeBox._SetFormat(hwnd, themeC["Foreground"], true)
+            CodeBox._SetFormat(hwnd, themeC["Foreground"], false, false, 0, -2)
 
 
 

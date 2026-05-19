@@ -1,5 +1,8 @@
 class CodeBox_Folding {
     static OnKeyDown(ctrl, wParam) {
+        if (ctrl.HasProp("IsPreviewing") && ctrl.IsPreviewing)
+            return 0
+
         if (wParam == 77 && GetKeyState("Ctrl", "P")) {
             CodeBox.Emit("PushHistory", ctrl, "Code Fold")
             cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)

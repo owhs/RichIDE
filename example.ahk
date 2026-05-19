@@ -18,6 +18,7 @@
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_ClipboardManager.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_ContextMenu.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_PluginManager.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_FindReplace.ahk"
 
 ; Register Plugins!
 ;CodeBox.DebugLogPath := A_ScriptDir "\codebox_debug.log" ; Toggleable debug log
@@ -36,6 +37,7 @@ CodeBox.RegisterPlugin("SmartTyping", CodeBox_SmartTyping)
 CodeBox.RegisterPlugin("ClipboardManager", CodeBox_ClipboardManager)
 CodeBox.RegisterPlugin("ContextMenu", CodeBox_ContextMenu)
 CodeBox.RegisterPlugin("PluginManager", CodeBox_PluginManager)
+CodeBox.RegisterPlugin("FindReplace", CodeBox_FindReplace)
 
 ; ==============================================================================
 ; DEMONSTRATION SHOWCASE GUI
@@ -279,6 +281,7 @@ Showcase() {
         }
     }
 
+    guiObj.OnEvent("Close", (*) => ExitApp())
     guiObj.Show("w1200")
 }
 
