@@ -222,6 +222,8 @@ class CodeBox_Highlighter {
             firedErr := Map()
             ctrl.ErrorLines := Map()
             ctrl.WarningLines := Map()
+            ctrl.ErrorRanges := []
+            ctrl.WarningRanges := []
 
             for rule in rules {
                 pos := 1
@@ -261,13 +263,17 @@ class CodeBox_Highlighter {
                             StrReplace(sub, "`n", "`n", , &nlCount)
                             lineNum := SendMessage(0x0436, 0, fetchStart, hwnd) + nlCount + 1
                             if isErr {
-                                ctrl.ErrorLines[lineNum] := rule.HasOwnProp("msg") ? rule.msg : "Invalid syntax: " m[0]
+                                msg := rule.HasOwnProp("msg") ? rule.msg : "Invalid syntax: " m[0]
+                                ctrl.ErrorLines[lineNum] := msg
+                                ctrl.ErrorRanges.Push({s: fmtStart, e: fmtEnd, msg: msg})
                                 if !firedErr.Has(m[0]) {
                                     firedErr[m[0]] := 1
                                     CodeBox._Fire(ctrl, "Error", m[0])
                                 }
                             } else {
-                                ctrl.WarningLines[lineNum] := rule.HasOwnProp("msg") ? rule.msg : "Potential issue: " m[0]
+                                msg := rule.HasOwnProp("msg") ? rule.msg : "Potential issue: " m[0]
+                                ctrl.WarningLines[lineNum] := msg
+                                ctrl.WarningRanges.Push({s: fmtStart, e: fmtEnd, msg: msg})
                             }
                         }
                     }
@@ -394,5 +400,38 @@ class CodeBox_Highlighter {
             ctrl.IsHighlighting := false
             ctrl.ChunkPos := endChar
         }
+    }
+
+    static OnMouseMove(ctrl, wParam, lParam, isSubCtrl, hwnd) {
+        if (!isSubCtrl && hwnd == ctrl.Hwnd) {
+            x := lParam & 0xFFFF
+            y := (lParam >> 16) & 0xFFFF
+            pt := Buffer(8, 0), NumPut("Int", x, pt, 0), NumPut("Int", y, pt, 4)
+            charIdx := SendMessage(0x0427, 0, pt.Ptr, ctrl.Hwnd)
+            
+            ttText := ""
+            if (ctrl.HasProp("ErrorRanges")) {
+                for r in ctrl.ErrorRanges {
+                    if (charIdx >= r.s && charIdx <= r.e) {
+                        ttText := "Error: " r.msg
+                        break
+                    }
+                }
+            }
+            if (ttText == "" && ctrl.HasProp("WarningRanges")) {
+                for r in ctrl.WarningRanges {
+                    if (charIdx >= r.s && charIdx <= r.e) {
+                        ttText := "Warning: " r.msg
+                        break
+                    }
+                }
+            }
+            
+            if (ttText != (ctrl.HasProp("HighlighterTT") ? ctrl.HighlighterTT : "")) {
+                ToolTip(ttText)
+                ctrl.HighlighterTT := ttText
+            }
+        }
+        return 0
     }
 }

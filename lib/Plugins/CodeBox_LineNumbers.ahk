@@ -59,26 +59,7 @@ class CodeBox_LineNumbers {
             ctrl.LineNumCtrl.GetPos(, , &w)
             hCursor := (CodeBox.IsPluginEnabled("Folding") && x > w - 20) ? CodeBox._CursorHand : CodeBox._CursorArrow
             DllCall("SetCursor", "Ptr", hCursor)
-            
-            pt := Buffer(8, 0), NumPut("Int", 1, pt, 0), NumPut("Int", y, pt, 4)
-            charIdx := SendMessage(0x0427, 0, pt.Ptr, ctrl.Hwnd)
-            vLine := SendMessage(0x0436, 0, charIdx, ctrl.Hwnd)
-            
-            ttText := ""
-            if (ctrl.HasProp("VisualErrors") && ctrl.VisualErrors.Has(vLine))
-                ttText := "Error: " ctrl.VisualErrors[vLine]
-            else if (ctrl.HasProp("VisualWarnings") && ctrl.VisualWarnings.Has(vLine))
-                ttText := "Warning: " ctrl.VisualWarnings[vLine]
-            
-            if (ttText != (ctrl.HasProp("LastTT") ? ctrl.LastTT : "")) {
-                ToolTip(ttText)
-                ctrl.LastTT := ttText
-            }
             return 1
-        }
-        if (!isSubCtrl && ctrl.HasProp("LastTT") && ctrl.LastTT != "") {
-            ToolTip()
-            ctrl.LastTT := ""
         }
         return 0
     }
