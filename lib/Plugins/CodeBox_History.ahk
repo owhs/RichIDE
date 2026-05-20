@@ -52,7 +52,12 @@ class CodeBox_History {
             ctrl.History.RemoveAt(ctrl.HistoryIndex + 1, ctrl.History.Length - ctrl.HistoryIndex)
         }
 
-        ctrl.History.Push({ text: text, selStart: selStart, selEnd: selEnd, action: action })
+        foldState := []
+        if IsSet(CodeBox_Folding) {
+            try foldState := CodeBox_Folding.GetFoldState(ctrl)
+        }
+
+        ctrl.History.Push({ text: text, selStart: selStart, selEnd: selEnd, action: action, foldState: foldState })
         ctrl.HistoryIndex := ctrl.History.Length
         CodeBox._Fire(ctrl, "HistoryChange", ctrl.History, ctrl.HistoryIndex)
     }
@@ -87,6 +92,11 @@ class CodeBox_History {
         SendMessage(0x000B, 0, 0, ctrl.Hwnd)
         SendMessage(0x000C, 0, StrPtr(textStr), ctrl.Hwnd)
         CodeBox._SetSel(ctrl.Hwnd, state.selStart, state.selEnd)
+
+        if IsSet(CodeBox_Folding) && state.HasOwnProp("foldState") {
+            try CodeBox_Folding.RestoreFoldState(ctrl, state.foldState)
+        }
+
         SendMessage(0x000B, 1, 0, ctrl.Hwnd)
         DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
 

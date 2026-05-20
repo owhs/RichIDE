@@ -1,9 +1,11 @@
 class CodeBox_ClipboardManager {
     static OnRegisterMenu(ctrl, fileMenu, editMenu, viewMenu, toolsMenu) {
+        ctrl.CopyHidden := true
         editMenu.Add("Include Hidden in Copy", (ItemName, ItemPos, MyMenu) => (
             ctrl.CopyHidden := !ctrl.CopyHidden,
             MyMenu.ToggleCheck(ItemName)
         ))
+        editMenu.Check("Include Hidden in Copy")
     }
     static OnDisable(ctrl) {
         if this.HasProp("ToolbarChk")
@@ -15,25 +17,32 @@ class CodeBox_ClipboardManager {
     }
 
     static OnKeyDown(ctrl, wParam) {
-        if ((wParam == 67 || wParam == 88) && GetKeyState("Ctrl") && ctrl.HasProp("CopyHidden") && !ctrl.CopyHidden) {
+        if ((wParam == 67 || wParam == 88) && GetKeyState("Ctrl")) {
             cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
             startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
             
             if (startSel == endSel)
                 return 0
+                
+            copyHidden := ctrl.HasProp("CopyHidden") ? ctrl.CopyHidden : true
 
-            visText := this.GetVisibleText(ctrl, startSel, endSel)
-            visText := StrReplace(StrReplace(visText, "`r`n", "`n"), "`r", "`n")
+            if (copyHidden) {
+                outText := CodeBox._GetTextRange(ctrl.Hwnd, startSel, endSel)
+            } else {
+                outText := this.GetVisibleText(ctrl, startSel, endSel)
+            }
             
-            isMultiLine := InStr(visText, "`n") > 0
-            if (isMultiLine && !(SubStr(visText, -1) == "`n")) {
+            outText := StrReplace(StrReplace(outText, "`r`n", "`n"), "`r", "`n")
+            
+            isMultiLine := InStr(outText, "`n") > 0
+            if (isMultiLine && !(SubStr(outText, -1) == "`n")) {
                 nextChar := CodeBox._GetTextRange(ctrl.Hwnd, endSel, endSel + 1)
                 if (nextChar == "`r" || nextChar == "`n") {
-                    visText .= "`n"
+                    outText .= "`n"
                 }
             }
             
-            A_Clipboard := StrReplace(visText, "`n", "`r`n")
+            A_Clipboard := StrReplace(outText, "`n", "`r`n")
             
             if (wParam == 88) {
                 CodeBox._InsertText(ctrl.Hwnd, "")
