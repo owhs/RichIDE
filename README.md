@@ -80,6 +80,15 @@ CodeBox uses a highly modular, event-driven architecture. Instead of the core ed
 
 This makes developing new plugins incredibly simple: you define a class with appropriately named static methods, register it, and the core will automatically call your hooks at the right time.
 
+### Programmatically Controlling Plugins
+
+You can easily interact with plugins at runtime using CodeBox's core static methods:
+
+- **`CodeBox.Invoke(methodName, args*)`**: Broadcasts a command string. The first active plugin that implements this method will execute it and return the result. This is used to trigger specific plugin actions (e.g., `CodeBox.Invoke("Undo", ctrl)` or `CodeBox.Invoke("Format", ctrl)`).
+- **`CodeBox.Emit(eventName, args*)`**: Broadcasts an event to *all* active plugins. If any plugin's hook returns a truthy value (`1` or `true`), the broadcast stops and the event is considered "consumed."
+- **`CodeBox.TogglePlugin(pluginName, booleanState)`**: Dynamically enables or disables a plugin at runtime. (e.g., `CodeBox.TogglePlugin("BracketMatcher", false)`).
+- **`CodeBox.IsPluginEnabled(pluginName)`**: Returns `true` if the plugin is currently active.
+
 ### Hooking (Available Event Hooks)
 
 If your plugin class contains any of these static methods, they will be automatically invoked by the CodeBox event loop.
