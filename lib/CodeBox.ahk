@@ -3,6 +3,8 @@ class CodeBox {
     static _DebounceTimers := Map(), _KeywordCache := Map()
     static Themes := Map(), Syntaxes := Map()
     static _Initialized := false
+    static _SubclassProcCallback := ""
+
 
     static _CursorHand := DllCall("LoadCursorW", "Ptr", 0, "Ptr", 32649, "Ptr")
     static _CursorArrow := DllCall("LoadCursorW", "Ptr", 0, "Ptr", 32512, "Ptr")
@@ -37,6 +39,20 @@ class CodeBox {
         for p in this.Plugins {
             if p.enabled && p.class.HasProp(method) {
                 try {
+                    methodObj := p.class.%method%
+                    if (methodObj is Func) {
+                        totalArgs := args.Length + 1
+                        if (!methodObj.IsVariadic && totalArgs > methodObj.MaxParams) {
+                            safeArgs := []
+                            takeCount := Max(0, methodObj.MaxParams - 1)
+                            loop Min(args.Length, takeCount) {
+                                safeArgs.Push(args[A_Index])
+                            }
+                            return methodObj(p.class, safeArgs*)
+                        } else {
+                            return methodObj(p.class, args*)
+                        }
+                    }
                     return p.class.%method%(args*)
                 } catch Error as err {
                     this.LogDebug("Plugin error (" p.name "." method "): " err.Message)
@@ -51,7 +67,22 @@ class CodeBox {
         for p in this.Plugins {
             if p.enabled && p.class.HasProp(eventName) {
                 try {
-                    res := p.class.%eventName%(args*)
+                    methodObj := p.class.%eventName%
+                    if (methodObj is Func) {
+                        totalArgs := args.Length + 1
+                        if (!methodObj.IsVariadic && totalArgs > methodObj.MaxParams) {
+                            safeArgs := []
+                            takeCount := Max(0, methodObj.MaxParams - 1)
+                            loop Min(args.Length, takeCount) {
+                                safeArgs.Push(args[A_Index])
+                            }
+                            res := methodObj(p.class, safeArgs*)
+                        } else {
+                            res := methodObj(p.class, args*)
+                        }
+                    } else {
+                        res := p.class.%eventName%(args*)
+                    }
                     if res {
                         handled := true
                         break
@@ -77,8 +108,10 @@ class CodeBox {
             DllCall("LoadLibrary", "Str", "msftedit.dll", "Ptr")
 
         this.Emit("OnInit")
-        if (CodeBox_Data ?? false)
-            CodeBox_Data.Init()
+        try {
+            dataClass := %"CodeBox_Data"%
+            dataClass.Init()
+        }
 
         OnMessage(0x0100, ObjBindMethod(this, "_OnKeyDown"))
         OnMessage(0x0102, ObjBindMethod(this, "_OnChar"))
@@ -143,6 +176,17 @@ class CodeBox {
         ctrl.DefineProp("Undo", { call: (c) => this.Invoke("Undo", c) })
         ctrl.DefineProp("Redo", { call: (c) => this.Invoke("Redo", c) })
         ctrl.DefineProp("Beautify", { call: (c) => this.Invoke("Format", c) })
+        CodeBoxFocus(c) {
+            cr := Buffer(8, 0)
+            SendMessage(0x0434, 0, cr.Ptr, c.Hwnd)
+            selStart := NumGet(cr, 0, "Int")
+            selEnd := NumGet(cr, 4, "Int")
+            caretPos := SendMessage(0x0464, 0, 0, c.Hwnd)
+            DllCall("user32\SetFocus", "Ptr", c.Hwnd)
+            ControlFocus(c.Hwnd)
+            CodeBox._SetSelDirectional(c.Hwnd, selStart, selEnd, caretPos)
+        }
+        ctrl.DefineProp("Focus", { call: CodeBoxFocus })
         ctrl.CopyHidden := false
         ctrl._ZoomPct := 100
 
@@ -166,14 +210,21 @@ class CodeBox {
         this._SetText(ctrl, text)
         this._Move(ctrl, px, py, pw, ph)
 
-        SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400, ctrl.Hwnd)
+        SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400 | 0x00080000, ctrl.Hwnd)
         ctrl.OnCommand(0x0300, ObjBindMethod(this, "_OnChange"))
         ctrl.OnNotify(0x0702, ObjBindMethod(this, "_OnSelectionChange"))
         ctrl.OnCommand(0x0602, ObjBindMethod(this, "_OnScroll"))
         ctrl.OnCommand(0x0400, ObjBindMethod(this, "_OnScroll"))
 
+        ; Native subclassing for robust event capture and standard fixes
+        if (!this._SubclassProcCallback) {
+            this._SubclassProcCallback := CallbackCreate(CodeBox_SubclassProc, , 6)
+        }
+        DllCall("comctl32\SetWindowSubclass", "Ptr", ctrl.Hwnd, "Ptr", this._SubclassProcCallback, "Ptr", ctrl.Hwnd, "Ptr", 0)
+
         this.Emit("OnControlCreated", ctrl)
         return ctrl
+
     }
 
     static _OnKeyDown(wParam, lParam, msg, hwnd) {
@@ -181,6 +232,9 @@ class CodeBox {
             return
 
         ctrl := this._Instances[hwnd]
+        if this._DebounceTimers.Has(hwnd) && (wParam == 0x10 || GetKeyState("Shift", "P")) {
+            SetTimer(this._DebounceTimers[hwnd], -400)
+        }
         this._Fire(ctrl, "KeyDown", wParam)
 
         ; Ctrl+= / Ctrl+- / Ctrl+0 zoom shortcuts
@@ -221,13 +275,19 @@ class CodeBox {
     static _OnLButtonDown(wParam, lParam, msg, hwnd) {
         if this._SubCtrls.Has(hwnd) {
             ctrl := this._SubCtrls[hwnd]
-            ControlFocus(ctrl.Hwnd)
+            DllCall("user32\SetFocus", "Ptr", ctrl.Hwnd)
+            if this._DebounceTimers.Has(ctrl.Hwnd) {
+                SetTimer(this._DebounceTimers[ctrl.Hwnd], -400)
+            }
             if this.Emit("OnLButtonDown", ctrl, wParam, lParam, true, hwnd)
                 return 1
             return 0
         }
         if this._Instances.Has(hwnd) {
             ctrl := this._Instances[hwnd]
+            if this._DebounceTimers.Has(hwnd) {
+                SetTimer(this._DebounceTimers[hwnd], -400)
+            }
             if this.Emit("OnLButtonDown", ctrl, wParam, lParam, false, hwnd)
                 return 1
             this._Fire(ctrl, "Click")
@@ -464,6 +524,12 @@ class CodeBox {
     }
 
     static _OnSelectionChange(ctrl, lParam) {
+        if (ctrl.HasProp("SuppressSelChangeEvent") && ctrl.SuppressSelChangeEvent)
+            return
+        hwnd := ctrl.Hwnd
+        if this._DebounceTimers.Has(hwnd) && (GetKeyState("LButton", "P") || GetKeyState("Shift", "P")) {
+            SetTimer(this._DebounceTimers[hwnd], -400)
+        }
         this.Emit("OnSelectionChange", ctrl)
     }
 
@@ -478,8 +544,16 @@ class CodeBox {
             return
         this._Fire(ctrl, "Change", this._GetText(ctrl))
         hwnd := ctrl.Hwnd
-        if !this._DebounceTimers.Has(hwnd)
-            this._DebounceTimers[hwnd] := () => this.Emit("OnChange", ctrl)
+        if !this._DebounceTimers.Has(hwnd) {
+            timerCallback(*) {
+                if (GetKeyState("LButton", "P") || GetKeyState("Shift", "P")) {
+                    SetTimer(this._DebounceTimers[hwnd], -200)
+                } else {
+                    this.Emit("OnChange", ctrl)
+                }
+            }
+            this._DebounceTimers[hwnd] := timerCallback
+        }
         SetTimer(this._DebounceTimers[hwnd], -400)
     }
 
@@ -493,12 +567,28 @@ class CodeBox {
     }
 
     static _OnContextMenu(wParam, lParam, msg, hwnd) {
-        if this._Instances.Has(hwnd) {
-            ctrl := this._Instances[hwnd]
+        targetHwnd := hwnd
+        if !this._Instances.Has(targetHwnd) && this._Instances.Has(wParam) {
+            targetHwnd := wParam
+        }
+        if this._Instances.Has(targetHwnd) {
+            ctrl := this._Instances[targetHwnd]
             x := lParam & 0xFFFF
             y := (lParam >> 16) & 0xFFFF
-            this.Emit("OnContextMenu", ctrl, x, y)
+            if (x > 32767)
+                x -= 65536
+            if (y > 32767)
+                y -= 65536
+            
+            ; Postpone context menu display to let the subclass callback return instantly and prevent re-entrancy crashes!
+            SetTimer(() => this._ShowContextMenuAsync(ctrl, x, y), -1)
+            return 0
         }
+    }
+
+    static _ShowContextMenuAsync(ctrl, x, y) {
+        this._Fire(ctrl, "ContextMenu", x, y)
+        this.Emit("OnContextMenu", ctrl, x, y)
     }
 
     static _OnDestroy(wParam, lParam, msg, hwnd) {
@@ -507,6 +597,11 @@ class CodeBox {
             this.Emit("OnDestroy", ctrl)
             if this._DebounceTimers.Has(hwnd)
                 SetTimer(this._DebounceTimers[hwnd], 0), this._DebounceTimers.Delete(hwnd)
+            
+            if (this._SubclassProcCallback) {
+                DllCall("comctl32\RemoveWindowSubclass", "Ptr", hwnd, "Ptr", this._SubclassProcCallback, "Ptr", hwnd)
+            }
+            
             this._Instances.Delete(hwnd)
         }
         if this._SubCtrls.Has(hwnd)
@@ -588,7 +683,7 @@ class CodeBox {
         ; On 64-bit, the pointer aligns perfectly at offset 8 (total 16 bytes).
         ; On 32-bit, the pointer is at offset 8 (total 12 bytes).
         tr := Buffer(8 + A_PtrSize, 0), NumPut("Int", start, tr, 0), NumPut("Int", end, tr, 4)
-        buf := Buffer((end - start + 1) * 2, 0), NumPut("Ptr", buf.Ptr, tr, 8)
+        buf := Buffer((end - start) * 4 + 2, 0), NumPut("Ptr", buf.Ptr, tr, 8)
         SendMessage(0x044B, 0, tr.Ptr, hwnd)
         return StrGet(buf, "UTF-16")
     }
@@ -600,6 +695,16 @@ class CodeBox {
 
     static _SetSel(hwnd, start, end) {
         cr := Buffer(8, 0), NumPut("Int", start, cr, 0), NumPut("Int", end, cr, 4)
+        SendMessage(0x0437, 0, cr.Ptr, hwnd)
+    }
+
+    static _SetSelDirectional(hwnd, startSel, endSel, caretPos) {
+        cr := Buffer(8, 0)
+        if (caretPos == startSel) {
+            NumPut("Int", endSel, cr, 0), NumPut("Int", startSel, cr, 4)
+        } else {
+            NumPut("Int", startSel, cr, 0), NumPut("Int", endSel, cr, 4)
+        }
         SendMessage(0x0437, 0, cr.Ptr, hwnd)
     }
 
@@ -635,4 +740,23 @@ class CodeBox {
     static _ColorToHex(c) {
         return Format("#{:06X}", c)
     }
+}
+
+CodeBox_SubclassProc(hwnd, msg, wParam, lParam, id, refData) {
+
+    ; 1. Fix cursor flickering (WM_SETCURSOR)
+    if (msg == 0x0020) { ; WM_SETCURSOR
+        if ((lParam & 0xFFFF) == 1) { ; HTCLIENT
+            DllCall("SetCursor", "Ptr", CodeBox._CursorIBeam)
+            return 1
+        }
+    }
+    
+    ; 2. Intercept context menu triggers (WM_CONTEXTMENU)
+    if (msg == 0x007B) { ; WM_CONTEXTMENU
+        CodeBox._OnContextMenu(wParam, lParam, msg, hwnd)
+        return 0
+    }
+
+    return DllCall("comctl32\DefSubclassProc", "Ptr", hwnd, "UInt", msg, "Ptr", wParam, "Ptr", lParam, "Ptr")
 }

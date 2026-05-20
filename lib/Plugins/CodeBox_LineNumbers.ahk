@@ -1,7 +1,7 @@
 class CodeBox_LineNumbers {
     static OnRegisterUI(ctrl, guiObj, &x, &y, maxW) {
         this.ToolbarChk := guiObj.Add("CheckBox", "x" x " y" (y+3) " cWhite Checked", "Lines")
-        this.ToolbarChk.OnEvent("Click", (c, *) => (ctrl.LineNumbers := c.Value))
+        this.ToolbarChk.OnEvent("Click", (c, *) => (ctrl.LineNumbers := c.Value, ctrl.Focus()))
         x += 65
     }
 

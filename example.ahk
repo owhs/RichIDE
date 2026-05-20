@@ -16,12 +16,13 @@
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_ExportHTML.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_SmartTyping.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_ClipboardManager.ahk"
-#Include "%A_ScriptDir%\lib\Plugins\CodeBox_ContextMenu.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_PluginManager.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_FindReplace.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_BracketMatcher.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_ContextMenu.ahk"
 
 ; Register Plugins!
-;CodeBox.DebugLogPath := A_ScriptDir "\codebox_debug.log" ; Toggleable debug log
+CodeBox.DebugLogPath := A_ScriptDir "\codebox_debug.log" ; Toggleable debug log
 CodeBox.RegisterPlugin("Highlighter", CodeBox_Highlighter)
 CodeBox.RegisterPlugin("Theming", CodeBox_Theming)
 CodeBox.RegisterPlugin("Selection", CodeBox_Selection)
@@ -35,9 +36,10 @@ CodeBox.RegisterPlugin("HexView", CodeBox_HexView)
 CodeBox.RegisterPlugin("ExportHTML", CodeBox_ExportHTML)
 CodeBox.RegisterPlugin("SmartTyping", CodeBox_SmartTyping)
 CodeBox.RegisterPlugin("ClipboardManager", CodeBox_ClipboardManager)
-CodeBox.RegisterPlugin("ContextMenu", CodeBox_ContextMenu)
 CodeBox.RegisterPlugin("PluginManager", CodeBox_PluginManager)
 CodeBox.RegisterPlugin("FindReplace", CodeBox_FindReplace)
+CodeBox.RegisterPlugin("BracketMatcher", CodeBox_BracketMatcher)
+CodeBox.RegisterPlugin("ContextMenu", CodeBox_ContextMenu)
 
 ; ==============================================================================
 ; DEMONSTRATION SHOWCASE GUI
@@ -93,22 +95,22 @@ Showcase() {
 
     ; --- Zoom Controls in Toolbar ---
     nextX += 15
-    btnZoomOut := guiObj.Add("Button", "x" nextX " y" (nextY) " w24 h24", "−")
+    btnZoomOut := guiObj.Add("Button", "x" nextX " y" (nextY) " w24 h24 +0x8000", "−")
     btnZoomOut.SetFont("s12 Bold", "Segoe UI")
     nextX += 26
     zoomLabel := guiObj.Add("Text", "x" nextX " y" (nextY + 4) " w45 h20 Center cWhite", "100%")
     zoomLabel.SetFont("s9", "Segoe UI")
     nextX += 47
-    btnZoomIn := guiObj.Add("Button", "x" nextX " y" (nextY) " w24 h24", "+")
+    btnZoomIn := guiObj.Add("Button", "x" nextX " y" (nextY) " w24 h24 +0x8000", "+")
     btnZoomIn.SetFont("s12 Bold", "Segoe UI")
     nextX += 26
-    btnZoomReset := guiObj.Add("Button", "x" nextX " y" (nextY) " w40 h24", "Reset")
+    btnZoomReset := guiObj.Add("Button", "x" nextX " y" (nextY) " w40 h24 +0x8000", "Reset")
     btnZoomReset.SetFont("s8", "Segoe UI")
     nextX += 45
 
-    btnZoomIn.OnEvent("Click", (*) => (box.ZoomIn(), 0))
-    btnZoomOut.OnEvent("Click", (*) => (box.ZoomOut(), 0))
-    btnZoomReset.OnEvent("Click", (*) => (box.ZoomReset(), 0))
+    btnZoomIn.OnEvent("Click", (*) => (box.ZoomIn(), box.Focus()))
+    btnZoomOut.OnEvent("Click", (*) => (box.ZoomOut(), box.Focus()))
+    btnZoomReset.OnEvent("Click", (*) => (box.ZoomReset(), box.Focus()))
 
     box.On("Zoom", (ctrl, pct) => zoomLabel.Text := pct "%")
 
@@ -121,7 +123,7 @@ Showcase() {
     box.UpdateBounds(15, finalY + 15, 820, 550 - (finalY + 15))
 
     ; Toolbar Interactions
-    chkWrap.OnEvent("Click", (*) => box.WordWrap := chkWrap.Value)
+    chkWrap.OnEvent("Click", (*) => (box.WordWrap := chkWrap.Value, box.Focus()))
 
     DebugZoom(box) {
         ctrl := CodeBox._Instances[box.Hwnd]
@@ -189,6 +191,10 @@ Showcase() {
     box.On("Click", (ctrl) => LogVerboseEvent("Select", "Drag/Select Start"))
     box.On("SelectEnd", (ctrl) => LogVerboseEvent("Select", "Drag/Select End"))
     box.On("ShowHistoryClicked", (*) => ToggleHistoryPanel())
+    box.On("ContextMenu", (ctrl, x, y) => LogVerboseEvent("ContextMenu", "Right-click at (" x ", " y ")", true))
+    box.On("ContextMenuOpen", (ctrl) => LogVerboseEvent("ContextMenuOpen", "Context menu opened", true))
+    box.On("ContextMenuClose", (ctrl) => LogVerboseEvent("ContextMenuClose", "Context menu closed", true))
+    box.On("ContextMenuClick", (ctrl, label) => LogVerboseEvent("ContextMenuClick", "Selected: " label, true))
 
 
     histPanel := guiObj.Add("ListView", "x845 y55 w200 h480 Background333333 cWhite -Multi", ["Action", "Length"])
@@ -197,9 +203,14 @@ Showcase() {
     histPanel.ModifyCol(2, 50)
     histPanel.OnEvent("DoubleClick", RestoreHistoryItem)
 
-    eventFilter := guiObj.Add("DropDownList", "x15 y550 w120 Choose1 Background333333 cWhite", ["All Events", "Type", "Key", "Select", "Change", "Error", "Suggest", "Fold"])
+    eventFilter := guiObj.Add("DropDownList", "x15 y550 w120 Choose1 Background333333 cWhite", ["All Events", "Type", "Key", "Select", "Change", "Error", "Suggest", "Fold", "ContextMenu"])
     eventFilter.Visible := false
     eventFilter.OnEvent("Change", (*) => RebuildEventPanel())
+
+    eventSearch := guiObj.Add("Edit", "x145 y550 w180 h26 Background333333 cWhite", "")
+    eventSearch.Visible := false
+    eventSearch.OnEvent("Change", (*) => RebuildEventPanel())
+    SendMessage(0x1501, 1, StrPtr("Filter by details..."), eventSearch.Hwnd)
 
     eventPanel := guiObj.Add("ListView", "x15 y580 w820 h70 Background333333 cWhite -Multi", ["Time", "Event", "Line", "CharRange", "MousePos", "Details"])
     eventPanel.Visible := false
@@ -213,9 +224,20 @@ Showcase() {
     RebuildEventPanel() {
         eventPanel.Delete()
         filter := eventFilter.Text
+        search := eventSearch.Text
         for ev in globalEventLog {
-            if (filter == "All Events" || filter == ev.eventName) {
-                eventPanel.Add("", ev.timeStr, ev.eventName, ev.lineIdx, ev.charRange, ev.mousePos, ev.details)
+            match := false
+            if (filter == "All Events")
+                match := true
+            else if (filter == "ContextMenu" && SubStr(ev.eventName, 1, 11) == "ContextMenu")
+                match := true
+            else if (filter == ev.eventName)
+                match := true
+                
+            if match {
+                if (search == "" || InStr(ev.eventName, search) || InStr(ev.details, search)) {
+                    eventPanel.Add("", ev.timeStr, ev.eventName, ev.lineIdx, ev.charRange, ev.mousePos, ev.details)
+                }
             }
         }
     }
@@ -223,6 +245,7 @@ Showcase() {
     ToggleEventPanel(*) {
         eventPanel.Visible := !eventPanel.Visible
         eventFilter.Visible := eventPanel.Visible
+        eventSearch.Visible := eventPanel.Visible
         guiObj.GetClientPos(, , &cw, &ch)
         Gui_Size(guiObj, 0, cw, ch)
     }
@@ -277,6 +300,7 @@ Showcase() {
             histPanel.Move(15 + boxW + 10, finalY + 15, 200, boxH)
         if eventPanel.Visible {
             eventFilter.Move(15, sbY - 140, 120, 26)
+            eventSearch.Move(145, sbY - 140, 180, 26)
             eventPanel.Move(15, sbY - 110, boxW, 110)
         }
     }

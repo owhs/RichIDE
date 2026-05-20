@@ -100,7 +100,7 @@ class CodeBox_Beautify {
         CodeBox._SetSel(ctrl.Hwnd, newSel, newSel)
         SendMessage(0x04DE, 0, pt.Ptr, ctrl.Hwnd)
 
-        SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400, ctrl.Hwnd)
+        SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400 | 0x00080000, ctrl.Hwnd)
         SendMessage(0x000B, 1, 0, ctrl.Hwnd)
         DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
 

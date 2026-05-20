@@ -90,10 +90,11 @@ class CodeBox_PluginManager {
         for hwnd, ctrl in CodeBox._Instances {
             cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
             startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+            caretPos := SendMessage(0x0464, 0, 0, ctrl.Hwnd)
             
             CodeBox.Emit("OnThemeChange", ctrl)
             ctrl.Text := ctrl.Text ; Force re-render of plain text without old highlighting
-            CodeBox._SetSel(ctrl.Hwnd, startSel, endSel)
+            CodeBox._SetSelDirectional(ctrl.Hwnd, startSel, endSel, caretPos)
             
             ctrl.ForceLineUpdate := true
             ctrl.ForceMiniUpdate := true

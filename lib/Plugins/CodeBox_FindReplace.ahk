@@ -17,6 +17,7 @@ class CodeBox_FindReplace {
     static OriginalText := ""
     static OriginalSelStart := 0
     static OriginalSelEnd := 0
+    static OriginalCaretPos := 0
     static OriginalScrollPos := Buffer(8, 0)
 
     static OnRegisterMenu(ctrl, fileMenu, editMenu, viewMenu, toolsMenu) {
@@ -687,32 +688,32 @@ class CodeBox_FindReplace {
         cr := Buffer(8, 0)
         SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd) ; EM_GETSEL
         startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+        caretPos := SendMessage(0x0464, 0, 0, ctrl.Hwnd)
         
         pt := Buffer(8, 0)
         SendMessage(0x04DD, 0, pt.Ptr, ctrl.Hwnd) ; EM_GETSCROLLPOS
 
-        ; Freeze rendering and disable standard selection options to prevent glitches
-        DllCall("HideCaret", "Ptr", ctrl.Hwnd)
         SendMessage(0x000B, 0, 0, ctrl.Hwnd) ; WM_SETREDRAW = false
         SendMessage(0x0445, 0, 0, ctrl.Hwnd) ; EM_SETOPTIONS (ECOOP_SET, 0)
 
-        ; Loop through all matches and apply our custom formatting using proven API
-        for m in this.SearchMatches {
-            CodeBox._SetSel(ctrl.Hwnd, m.start, m.end)
-            CodeBox._SetFormat(ctrl.Hwnd, fgColor, false, false, 0, bgColor)
+        try {
+            ; Loop through all matches and apply our custom formatting using proven API
+            for m in this.SearchMatches {
+                CodeBox._SetSel(ctrl.Hwnd, m.start, m.end)
+                CodeBox._SetFormat(ctrl.Hwnd, fgColor, false, false, 0, bgColor)
+            }
+        } finally {
+            ; Restore selection and scroll position
+            CodeBox._SetSelDirectional(ctrl.Hwnd, startSel, endSel, caretPos)
+            SendMessage(0x04DE, 0, pt.Ptr, ctrl.Hwnd) ; EM_SETSCROLLPOS
+
+            ; Restore options and unfreeze control redraw
+            SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400 | 0x00080000, ctrl.Hwnd) ; EM_SETOPTIONS (ECOOP_SET, standard)
+            SendMessage(0x000B, 1, 0, ctrl.Hwnd) ; WM_SETREDRAW = true
+            DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
+
+            this.IsHighlightingAll := false
         }
-
-        ; Restore selection and scroll position
-        CodeBox._SetSel(ctrl.Hwnd, startSel, endSel)
-        SendMessage(0x04DE, 0, pt.Ptr, ctrl.Hwnd) ; EM_SETSCROLLPOS
-
-        ; Restore options and unfreeze control redraw
-        SendMessage(0x0445, 0, 0x10001 | 0x08 | 0x0400, ctrl.Hwnd) ; EM_SETOPTIONS (ECOOP_SET, standard)
-        SendMessage(0x000B, 1, 0, ctrl.Hwnd) ; WM_SETREDRAW = true
-        DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
-        DllCall("ShowCaret", "Ptr", ctrl.Hwnd)
-
-        this.IsHighlightingAll := false
     }
 
     static _CheckHover() {
@@ -773,6 +774,7 @@ class CodeBox_FindReplace {
                 SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd) ; EM_GETSEL
                 this.OriginalSelStart := NumGet(cr, 0, "Int")
                 this.OriginalSelEnd := NumGet(cr, 4, "Int")
+                this.OriginalCaretPos := SendMessage(0x0464, 0, 0, ctrl.Hwnd)
                 
                 ; 3. Save original scroll position
                 this.OriginalScrollPos := Buffer(8, 0)
@@ -853,7 +855,7 @@ class CodeBox_FindReplace {
         CodeBox_Highlighter.Highlight(ctrl)
 
         ; Restore original selection and scroll position
-        CodeBox._SetSel(ctrl.Hwnd, this.OriginalSelStart, this.OriginalSelEnd)
+        CodeBox._SetSelDirectional(ctrl.Hwnd, this.OriginalSelStart, this.OriginalSelEnd, this.OriginalCaretPos)
         SendMessage(0x04DE, 0, this.OriginalScrollPos.Ptr, ctrl.Hwnd)
 
         ; Restore drawing

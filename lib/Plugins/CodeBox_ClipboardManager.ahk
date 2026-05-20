@@ -24,6 +24,15 @@ class CodeBox_ClipboardManager {
 
             visText := this.GetVisibleText(ctrl, startSel, endSel)
             visText := StrReplace(StrReplace(visText, "`r`n", "`n"), "`r", "`n")
+            
+            isMultiLine := InStr(visText, "`n") > 0
+            if (isMultiLine && !(SubStr(visText, -1) == "`n")) {
+                nextChar := CodeBox._GetTextRange(ctrl.Hwnd, endSel, endSel + 1)
+                if (nextChar == "`r" || nextChar == "`n") {
+                    visText .= "`n"
+                }
+            }
+            
             A_Clipboard := StrReplace(visText, "`n", "`r`n")
             
             if (wParam == 88) {
@@ -31,18 +40,52 @@ class CodeBox_ClipboardManager {
             }
             return 1
         }
+
+        if ((wParam == 86 && GetKeyState("Ctrl")) || (wParam == 45 && GetKeyState("Shift"))) {
+            clipText := A_Clipboard
+            if (clipText == "")
+                return 0
+
+            ; Normalize clipboard text newlines for uniform boundary checking
+            clipTextNormalized := StrReplace(StrReplace(clipText, "`r`n", "`n"), "`r", "`n")
+            
+            if (SubStr(clipTextNormalized, -1) == "`n") {
+                cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
+                startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+                
+                nextChar := CodeBox._GetTextRange(ctrl.Hwnd, endSel, endSel + 1)
+                if (nextChar == "`r" || nextChar == "`n") {
+                    ; Strip the trailing newline from the pasted text to prevent duplication
+                    clipTextNormalized := SubStr(clipTextNormalized, 1, -1)
+                }
+            }
+            
+            CodeBox._InsertText(ctrl.Hwnd, clipTextNormalized)
+            return 1
+        }
         return 0
     }
 
     static GetVisibleText(ctrl, startSel, endSel) {
-        SendMessage(0x000B, 0, 0, ctrl.Hwnd)
         cf2 := Buffer(116, 0)
+        NumPut("UInt", 116, cf2, 0)
+        SendMessage(0x043A, 1, cf2.Ptr, ctrl.Hwnd) ; EM_GETCHARFORMAT of current selection
         
         fullText := CodeBox._GetTextRange(ctrl.Hwnd, startSel, endSel)
+        
+        ; If the hidden attribute is uniform across the selection and not hidden, bypass sub-selections
+        if ((NumGet(cf2, 4, "UInt") & 0x0100) && !(NumGet(cf2, 8, "UInt") & 0x0100)) {
+            return fullText
+        }
+        
+        ; Fallback for folded blocks
+        caretPos := SendMessage(0x0464, 0, 0, ctrl.Hwnd)
+        ctrl.SuppressSelChangeEvent := true
+        
+        SendMessage(0x000B, 0, 0, ctrl.Hwnd)
         out := ""
         
         i := startSel
-        strIdx := 1
         while (i < endSel) {
             chunkEnd := Min(i + 64, endSel)
             
@@ -51,11 +94,9 @@ class CodeBox_ClipboardManager {
             SendMessage(0x043A, 1, cf2.Ptr, ctrl.Hwnd)
             
             if (NumGet(cf2, 4, "UInt") & 0x0100) {
-                len := chunkEnd - i
                 if !(NumGet(cf2, 8, "UInt") & 0x0100)
-                    out .= SubStr(fullText, strIdx, len)
+                    out .= CodeBox._GetTextRange(ctrl.Hwnd, i, chunkEnd)
                 i := chunkEnd
-                strIdx += len
                 continue
             }
             
@@ -65,15 +106,15 @@ class CodeBox_ClipboardManager {
                 CodeBox._SetSel(ctrl.Hwnd, j, j + 1)
                 SendMessage(0x043A, 1, cf2.Ptr, ctrl.Hwnd)
                 if !(NumGet(cf2, 8, "UInt") & 0x0100)
-                    out .= SubStr(fullText, strIdx, 1)
+                    out .= CodeBox._GetTextRange(ctrl.Hwnd, j, j + 1)
                 j++
-                strIdx++
             }
             i := chunkEnd
         }
         
-        CodeBox._SetSel(ctrl.Hwnd, startSel, endSel)
+        CodeBox._SetSelDirectional(ctrl.Hwnd, startSel, endSel, caretPos)
         SendMessage(0x000B, 1, 0, ctrl.Hwnd)
+        ctrl.SuppressSelChangeEvent := false
         return out
     }
 }
