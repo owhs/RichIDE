@@ -86,6 +86,8 @@ class CodeBox_BracketMatcher {
         this.IsMatching := true
         try {
             if (CodeBox.IsPluginEnabled("BracketMatcher")) {
+                ; The highlighter wiped out our formatting, so forget previous positions
+                ctrl.PrevBracketPositions := ""
                 this.MatchBrackets(ctrl)
             }
         } finally {
@@ -99,6 +101,7 @@ class CodeBox_BracketMatcher {
         this.IsMatching := true
         try {
             if (CodeBox.IsPluginEnabled("BracketMatcher")) {
+                ctrl.PrevBracketPositions := ""
                 this.MatchBrackets(ctrl)
             }
         } finally {

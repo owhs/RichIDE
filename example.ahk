@@ -7,6 +7,7 @@
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Theming.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Selection.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Scrollbars.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_MarkdownView.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_LineNumbers.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Folding.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_History.ahk"
@@ -27,6 +28,7 @@ CodeBox.RegisterPlugin("Highlighter", CodeBox_Highlighter)
 CodeBox.RegisterPlugin("Theming", CodeBox_Theming)
 CodeBox.RegisterPlugin("Selection", CodeBox_Selection)
 CodeBox.RegisterPlugin("Scrollbars", CodeBox_Scrollbars)
+CodeBox.RegisterPlugin("MarkdownView", CodeBox_MarkdownView)
 CodeBox.RegisterPlugin("LineNumbers", CodeBox_LineNumbers)
 CodeBox.RegisterPlugin("Folding", CodeBox_Folding)
 CodeBox.RegisterPlugin("History", CodeBox_History)
@@ -331,6 +333,8 @@ GetExampleText(lang) {
         return "Name,Age,Job`nAlice,30,Engineer`nBob,25,Designer"
     if lang == "tsv"
         return "Name`tAge`tJob`nAlice`t30`tEngineer`nBob`t25`tDesigner"
+    if lang == "md"
+        return "# Markdown Example`n`n> This is a **robust** *blockquote*!`n`n``````ahk2`n; Code block`nMsgBox(`"Hello`")`n```````n`nHere is some ``inline code`` and a [Link](http://example.com).`n`n- List Item 1`n- List Item 2`n`n| Feature | Status |`n|---|---|`n| Parsing | Native |`n| JS | None |`n`n---"
     return "Plain text example..."
 }
 

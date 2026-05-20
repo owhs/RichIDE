@@ -44,7 +44,7 @@ class CodeBox_ClipboardManager {
         if ((wParam == 86 && GetKeyState("Ctrl")) || (wParam == 45 && GetKeyState("Shift"))) {
             clipText := A_Clipboard
             if (clipText == "")
-                return 0
+                return 1 ; Block pasting of non-text data like images
 
             ; Normalize clipboard text newlines for uniform boundary checking
             clipTextNormalized := StrReplace(StrReplace(clipText, "`r`n", "`n"), "`r", "`n")

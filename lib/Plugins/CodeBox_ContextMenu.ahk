@@ -27,6 +27,7 @@ class CodeBox_ContextMenu {
         
         ; Formatting section
         this.RegisterItem("formatting", "Format Document`tShift+Alt+F", (ctx) => CodeBox.Invoke("Format", ctx.ctrl), (*) => true, "shell32.dll", 136, 10)
+        this.RegisterItem("formatting", "Toggle Markdown Preview`tCtrl+K", (ctx) => CodeBox.Invoke("ToggleMarkdownView", ctx.ctrl, !ctx.ctrl.HasProp("_MdView") ? true : !ctx.ctrl._MdView), (ctx) => (StrLower(ctx.ctrl.CodeBoxLang) == "md"), "shell32.dll", 15, 20)
         
         ; Plugins section
         this.RegisterItem("plugins", "Manage Plugins...", (ctx) => CodeBox.Invoke("ShowPluginManager", ctx.ctrl), (*) => true, "shell32.dll", 22, 10)

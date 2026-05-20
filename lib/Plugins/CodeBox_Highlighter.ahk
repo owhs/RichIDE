@@ -216,6 +216,7 @@ class CodeBox_Highlighter {
             rng.Font.ForeColor := defColorBGR
             rng.Font.BackColor := bgBGR ; Strips formatting carried over from pasted RTF
             rng.Font.Bold := 0
+            rng.Font.Italic := 0
             rng.Font.Underline := 0
 
             firedErr := Map()
@@ -226,6 +227,7 @@ class CodeBox_Highlighter {
                 pos := 1
                 colorBGR := this.RGBtoBGR(themeC.Has(rule.c) ? themeC[rule.c] : themeC["Foreground"])
                 b := rule.HasOwnProp("b") && rule.b ? -1 : 0 ; -1 represents COM Variant_True
+                i_opt := rule.HasOwnProp("i") && rule.i ? -1 : 0
                 u := rule.HasOwnProp("u") ? rule.u : 0       ; Native mapping (8 = tomWave squiggles)
                 isDefaultColor := (colorBGR == defColorBGR)
                 isErr := (rule.c == "Error"), isWarn := (rule.c == "Warning")
@@ -249,6 +251,8 @@ class CodeBox_Highlighter {
                             mRng.Font.ForeColor := colorBGR
                         if b
                             mRng.Font.Bold := b
+                        if i_opt
+                            mRng.Font.Italic := i_opt
                         if u
                             mRng.Font.Underline := u
 
@@ -351,12 +355,14 @@ class CodeBox_Highlighter {
             rng.Font.ForeColor := defColorBGR
             rng.Font.BackColor := bgBGR ; Strips formatting carried over from pasted RTF
             rng.Font.Bold := 0
+            rng.Font.Italic := 0
             rng.Font.Underline := 0
 
             for rule in rules {
                 pos := 1
                 colorBGR := this.RGBtoBGR(themeC.Has(rule.c) ? themeC[rule.c] : themeC["Foreground"])
                 b := rule.HasOwnProp("b") && rule.b ? -1 : 0
+                i_opt := rule.HasOwnProp("i") && rule.i ? -1 : 0
                 u := rule.HasOwnProp("u") ? rule.u : 0
                 isDefaultColor := (colorBGR == defColorBGR)
 
@@ -375,6 +381,8 @@ class CodeBox_Highlighter {
                             mRng.Font.ForeColor := colorBGR
                         if b
                             mRng.Font.Bold := b
+                        if i_opt
+                            mRng.Font.Italic := i_opt
                         if u
                             mRng.Font.Underline := u
                     }

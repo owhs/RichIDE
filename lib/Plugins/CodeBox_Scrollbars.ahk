@@ -42,7 +42,6 @@ class CodeBox_Scrollbars {
             ) })
         }
 
-        ; User request: Standalone God Tier programmatic scroll callers
         ctrl.DefineProp("ScrollToLine", { call: (c, lineIdx, smooth := true) => CodeBox_Scrollbars.ScrollToLine(c, lineIdx, smooth) })
         ctrl.DefineProp("ScrollTo", { call: (c, yPos) => CodeBox_Scrollbars.SetScrollPos(c, -1, yPos) })
 
@@ -324,13 +323,15 @@ class CodeBox_Scrollbars {
             ctrl.ScrollTrack.GetPos(, , &tw, &th)
             ctrl.ScrollThumb.GetPos(, , , &thH)
 
-            totalH := this.GetTotalHeight(ctrl)
-            ctrl.GetPos(, , &cw, &ch)
+            siMainV := Buffer(28, 0), NumPut("UInt", 28, siMainV, 0), NumPut("UInt", 0x17, siMainV, 4)
+            DllCall("GetScrollInfo", "Ptr", ctrl.Hwnd, "Int", 1, "Ptr", siMainV)
+            vMax := NumGet(siMainV, 12, "Int")
+            vPage := NumGet(siMainV, 16, "UInt")
 
-            clickYRatio := (y - (thH / 2)) / (th - thH)
+            clickYRatio := (y - (thH / 2)) / Max(1, th - thH)
             clickYRatio := Max(0, Min(1, clickYRatio))
 
-            this.SetScrollPos(ctrl, -1, clickYRatio * (totalH - ch))
+            this.SetScrollPos(ctrl, -1, clickYRatio * Max(1, vMax - vPage))
             this.UpdateScrollbar(ctrl)
 
             ; Auto trigger drag lock on track jump
@@ -434,12 +435,16 @@ class CodeBox_Scrollbars {
             DllCall("GetCursorPos", "Ptr", pt)
             currentY := NumGet(pt, 4, "Int")
 
-            totalH := this.GetTotalHeight(ctrl)
-            ctrl.GetPos(, , &cw, &ch)
+            siMainV := Buffer(28, 0), NumPut("UInt", 28, siMainV, 0), NumPut("UInt", 0x17, siMainV, 4)
+            DllCall("GetScrollInfo", "Ptr", ctrl.Hwnd, "Int", 1, "Ptr", siMainV)
+            vMax := NumGet(siMainV, 12, "Int")
+            vPage := NumGet(siMainV, 16, "UInt")
 
-            thumbH := Max(35, (ch / totalH) * ch)
-            scrollCapacity := totalH - ch
-            thumbCapacity := ch - thumbH
+            ctrl.ScrollTrack.GetPos(, , &tw, &th)
+            ctrl.ScrollThumb.GetPos(, , , &thumbH)
+
+            scrollCapacity := vMax - vPage
+            thumbCapacity := th - thumbH
 
             if (thumbCapacity > 0) {
                 scrollDelta := ((currentY - ctrl.DragStartY) / thumbCapacity) * scrollCapacity
