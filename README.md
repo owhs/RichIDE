@@ -71,6 +71,7 @@ CodeBox's power comes entirely from its plugins. The core is extremely lightweig
 *   **`CodeBox_SmartTyping`**: Provides quality-of-life IDE features like auto-closing brackets (`{` auto-inserts `}`), auto-indentation on new lines, and smart deletion.
 *   **`CodeBox_ClipboardManager`**: Overrides native copy, cut, and paste to handle rich text stripping, multi-line pasting, and interacting with the system clipboard securely.
 *   **`CodeBox_ContextMenu`**: Provides a custom, theme-aware right-click menu tailored for coding (Cut, Copy, Paste, Format, Export, etc.) replacing the default system menu.
+*   **`CodeBox_MarkdownView`**: A robust, JavaScript-free toggleable preview window that perfectly renders Markdown (with table support) and dynamically injects your IDE theme colors into the CSS.
 *   **`CodeBox_PluginManager`**: An embedded UI tool (accessible via menu or toolbar) that allows users to toggle plugins on and off instantly at runtime without restarting the application.
 
 ## Plugin Architecture & Making Plugins
@@ -90,6 +91,8 @@ If your plugin class contains any of these static methods, they will be automati
 - **`OnThemeChange(ctrl)`**: Triggered when `ctrl.Theme` is updated.
 - **`OnHighlight(ctrl)`**: Emitted *after* the text has been completely syntax-highlighted.
 - **`OnDestroy(ctrl)`**: Emitted right before the control is destroyed. Use this to clean up timers and GUIs.
+- **`OnShowWindow(ctrl, wParam)`**: Emitted when the control's visibility is toggled.
+- **`OnWindowPosChanged(ctrl)`**: Emitted when the control's size or position is updated.
 - **`OnRegisterMenu(ctrl, fileMenu, editMenu, viewMenu, toolsMenu)`**: Emitted on setup, allowing plugins to inject their own menu items into the IDE's menu bar.
 - **`OnRegisterUI(ctrl, guiObj, &x, &y, maxW)`**: Emitted on setup, allowing plugins to add toolbar icons or other GUI elements.
 
@@ -99,7 +102,9 @@ To prevent the core CodeBox from continuing to process an input event, simply re
 - **`OnKeyDown(ctrl, wParam)`**: Fired when a key is pressed. (e.g., intercept `wParam == 90` for `Ctrl+Z` Undo). Return `1` to consume.
 - **`OnChar(ctrl, wParam)`**: Fired when a character is typed. Perfect for auto-closing braces. Return `1` to consume.
 - **`OnChange(ctrl)`**: Fired when the text content changes (debounced by default).
+- **`OnSelectionChange(ctrl)`**: Emitted when the user selects text or moves the caret position.
 - **`OnScroll(ctrl)`**: Fired during vertical/horizontal scrolling or mouse wheel usage. 
+- **`OnZoom(ctrl, pct)`**: Emitted when the user zooms in or out of the editor.
 - **`OnSuggestCheck(ctrl)`**: Emitted when the user types a character and the auto-suggest engine should evaluate the context.
 - **`OnSuggestHide(ctrl)`**: Emitted when the auto-suggest window should be closed.
 - **`OnContextMenu(ctrl, x, y)`**: Emitted when the user right-clicks.
