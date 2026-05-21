@@ -42,6 +42,10 @@ class CodeBox_SmartTyping {
     }
 
     static OnKeyDown(ctrl, wParam) {
+        if (wParam == 191 && GetKeyState("Ctrl", "P")) {
+            this.ToggleComment(ctrl, GetKeyState("Shift", "P"))
+            return 1
+        }
         if (wParam == 9 && !GetKeyState("Ctrl", "P")) {
             cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
             startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
@@ -113,5 +117,104 @@ class CodeBox_SmartTyping {
             }
         }
         return 0
+    }
+
+    static ToggleComment(ctrl, isBlock) {
+        lang := StrLower(ctrl.CodeBoxLang)
+        lineSym := ""
+        blockStart := "", blockEnd := ""
+
+        if (lang ~= "^(ahk2|ini)$") {
+            lineSym := ";"
+            blockStart := "/*", blockEnd := "*/"
+        } else if (lang ~= "^(js|cs|cpp|c|java|php|go|rust|css)$") {
+            lineSym := "//"
+            blockStart := "/*", blockEnd := "*/"
+        } else if (lang ~= "^(python|ruby|ps1|yaml)$") {
+            lineSym := "#"
+            blockStart := (lang == "ps1") ? "<#" : (lang == "python") ? '"""' : ""
+            blockEnd := (lang == "ps1") ? "#>" : (lang == "python") ? '"""' : ""
+        } else if (lang ~= "^(bat|cmd)$") {
+            lineSym := "::"
+        } else if (lang ~= "^(sql)$") {
+            lineSym := "--"
+            blockStart := "/*", blockEnd := "*/"
+        } else if (lang ~= "^(html|xml|md)$") {
+            lineSym := "<!--"
+            blockStart := "<!--", blockEnd := "-->"
+        } else {
+            lineSym := "//"
+        }
+
+        cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
+        startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+
+        CodeBox.Emit("PushHistory", ctrl, "Toggle Comment")
+
+        if (isBlock && blockStart != "") {
+            text := CodeBox._GetTextRange(ctrl.Hwnd, startSel, endSel)
+            if (SubStr(text, 1, StrLen(blockStart)) == blockStart && SubStr(text, -StrLen(blockEnd)) == blockEnd) {
+                newText := SubStr(text, StrLen(blockStart) + 1, StrLen(text) - StrLen(blockStart) - StrLen(blockEnd))
+                CodeBox._InsertText(ctrl.Hwnd, newText)
+                CodeBox._SetSel(ctrl.Hwnd, startSel, startSel + StrLen(newText))
+            } else {
+                newText := blockStart text blockEnd
+                CodeBox._InsertText(ctrl.Hwnd, newText)
+                CodeBox._SetSel(ctrl.Hwnd, startSel, startSel + StrLen(newText))
+            }
+            return
+        }
+
+        lineStartIdx := SendMessage(0x0436, 0, startSel, ctrl.Hwnd)
+        lineEndIdx := SendMessage(0x0436, 0, endSel, ctrl.Hwnd)
+
+        if (lineEndIdx > lineStartIdx && endSel == SendMessage(0x00BB, lineEndIdx, 0, ctrl.Hwnd))
+            lineEndIdx--
+
+        startChar := SendMessage(0x00BB, lineStartIdx, 0, ctrl.Hwnd)
+        lastLineStart := SendMessage(0x00BB, lineEndIdx, 0, ctrl.Hwnd)
+        lastLineLen := SendMessage(0x00C1, lastLineStart, 0, ctrl.Hwnd)
+
+        text := CodeBox._GetTextRange(ctrl.Hwnd, startChar, lastLineStart + lastLineLen)
+        lines := StrSplit(text, "`n")
+
+        allCommented := true
+        for line in lines {
+            if (Trim(line) != "") {
+                if (lineSym == "<!--") {
+                    if !RegExMatch(line, "^\s*<!--.*?-->\s*$") {
+                        allCommented := false
+                        break
+                    }
+                } else if (SubStr(Trim(line), 1, StrLen(lineSym)) != lineSym) {
+                    allCommented := false
+                    break
+                }
+            }
+        }
+
+        newText := ""
+        for i, line in lines {
+            if (Trim(line) == "") {
+                newText .= line "`n"
+                continue
+            }
+            if (allCommented) {
+                if (lineSym == "<!--")
+                    newText .= RegExReplace(line, "^(\s*)<!--\s?(.*?)\s?-->\s*$", "$1$2") "`n"
+                else
+                    newText .= RegExReplace(line, "^(\s*)\Q" lineSym "\E\s?", "$1") "`n"
+            } else {
+                if (lineSym == "<!--")
+                    newText .= RegExReplace(line, "^(\s*)(.*)", "$1<!-- $2 -->") "`n"
+                else
+                    newText .= RegExReplace(line, "^(\s*)(.*)", "$1" lineSym " $2") "`n"
+            }
+        }
+        newText := SubStr(newText, 1, -1)
+
+        CodeBox._SetSel(ctrl.Hwnd, startChar, lastLineStart + lastLineLen)
+        CodeBox._InsertText(ctrl.Hwnd, newText)
+        CodeBox._SetSel(ctrl.Hwnd, startChar, startChar + StrLen(newText))
     }
 }

@@ -280,6 +280,7 @@ class CodeBox_Highlighter {
                     pos := match + m.Len[0]
                 }
             }
+        } catch {
         } finally {
             doc.Unfreeze()
             ctrl.IsHighlighting := false
@@ -395,6 +396,7 @@ class CodeBox_Highlighter {
                     pos := match + m.Len[0]
                 }
             }
+        } catch {
         } finally {
             doc.Unfreeze()
             ctrl.IsHighlighting := false

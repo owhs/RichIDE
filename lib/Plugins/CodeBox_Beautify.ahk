@@ -1,6 +1,23 @@
 class CodeBox_Beautify {
+    static ForceOperatorSpacing := true
+
     static OnRegisterMenu(ctrl, fileMenu, editMenu, viewMenu, toolsMenu) {
-        editMenu.Add("Format Code`tF", (*) => CodeBox.Invoke("Format", ctrl))
+        formatMenu := Menu()
+        formatMenu.Add("Format Code`tCtrl+Shift+F", (*) => CodeBox.Invoke("Format", ctrl))
+        formatMenu.Add()
+        formatMenu.Add("Force Operator Spacing", this.ToggleSpacing.Bind(this))
+        if this.ForceOperatorSpacing
+            formatMenu.Check("Force Operator Spacing")
+        
+        editMenu.Add("Code Beautifier", formatMenu)
+    }
+
+    static ToggleSpacing(itemName, itemPos, m) {
+        this.ForceOperatorSpacing := !this.ForceOperatorSpacing
+        if this.ForceOperatorSpacing
+            m.Check(itemName)
+        else
+            m.Uncheck(itemName)
     }
     static OnDisable(ctrl) {
         if this.HasProp("ToolbarBtn")
@@ -39,40 +56,71 @@ class CodeBox_Beautify {
         indentNext := 0
 
         for i, line in lines {
+            origPad := ""
+            RegExMatch(line, "^\s*", &m)
+            if m
+                origPad := m[0]
+            
             line := Trim(line)
             if (line == "") {
                 newText .= "`n"
                 continue
             }
 
-            cleanLine := RegExReplace(line, '(".*?"|`'`'.*?`'`'|//.*|/\*.*?\*/|;.*)')
+            cleanLine := RegExReplace(line, '(".*?"|`'`'.*?`'`'|//.*|/\*.*?\*/|;.*|<!--.*?-->)')
 
-            if RegExMatch(cleanLine, "^[\}\]\)]") {
-                indent := Max(0, indent - 1)
-                indentNext := 0
+            if (lang ~= "^(ahk2|js|cs|java|cpp|c|php|go|rust|css|json)$") {
+                if RegExMatch(cleanLine, "^[\}\]\)]") {
+                    indent := Max(0, indent - 1)
+                    indentNext := 0
+                }
+                pad := ""
+                loop (indent + indentNext)
+                    pad .= "    "
+            } else if (lang ~= "^(xml|html)$") {
+                if RegExMatch(cleanLine, "i)^<\/") {
+                    indent := Max(0, indent - 1)
+                }
+                pad := ""
+                loop indent
+                    pad .= "    "
+            } else {
+                pad := origPad
             }
 
-            pad := ""
-            loop (indent + indentNext)
-                pad .= "    "
-
-            newText .= pad line "`n"
-
-            if (indentNext > 0)
-                indentNext--
-
-            openCount := 0, closeCount := 0
-            RegExReplace(cleanLine, "[\{\[\(]", "", &openCount)
-            RegExReplace(cleanLine, "[\}\]\)]", "", &closeCount)
-
-            indent += (openCount - closeCount)
-
-            if RegExMatch(cleanLine, "i)^(if|else|loop|while|for|try|catch|finally)\b") && !RegExMatch(cleanLine, "\{\s*$") {
-                indentNext := 1
+            fmtLine := line
+            if (this.ForceOperatorSpacing && lang ~= "^(ahk2|js|cs|java|cpp|c|php|go|rust|python|sql|ps1)$") {
+                if !InStr(fmtLine, '"') && !InStr(fmtLine, "'") {
+                    fmtLine := RegExReplace(fmtLine, "\s*(!=|==|>=|<=|=>|\+=|-=|\*=|/=|:=|=)\s*", " $1 ")
+                    fmtLine := StrReplace(fmtLine, "  ", " ")
+                }
             }
 
-            if (indent < 0)
-                indent := 0
+            newText .= pad fmtLine "`n"
+
+            if (lang ~= "^(ahk2|js|cs|java|cpp|c|php|go|rust|css|json)$") {
+                if (indentNext > 0)
+                    indentNext--
+
+                openCount := 0, closeCount := 0
+                RegExReplace(cleanLine, "[\{\[\(]", "", &openCount)
+                RegExReplace(cleanLine, "[\}\]\)]", "", &closeCount)
+                indent += (openCount - closeCount)
+
+                if RegExMatch(cleanLine, "i)^(if|else|loop|while|for|try|catch|finally)\b") && !RegExMatch(cleanLine, "\{\s*$") {
+                    indentNext := 1
+                }
+                
+                if (indent < 0)
+                    indent := 0
+            } else if (lang ~= "^(xml|html)$") {
+                openCount := 0, closeCount := 0
+                RegExReplace(cleanLine, "i)<[a-z]+[^>]*(?<!\/)>", "", &openCount)
+                RegExReplace(cleanLine, "i)<\/[a-z]+>", "", &closeCount)
+                indent += (openCount - closeCount)
+                if (indent < 0)
+                    indent := 0
+            }
         }
 
         newText := SubStr(newText, 1, -1)

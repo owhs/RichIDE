@@ -21,6 +21,7 @@
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_FindReplace.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_BracketMatcher.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_ContextMenu.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_INIEditor.ahk"
 
 ; Register Plugins!
 CodeBox.DebugLogPath := A_ScriptDir "\codebox_debug.log" ; Toggleable debug log
@@ -42,6 +43,7 @@ CodeBox.RegisterPlugin("PluginManager", CodeBox_PluginManager)
 CodeBox.RegisterPlugin("FindReplace", CodeBox_FindReplace)
 CodeBox.RegisterPlugin("BracketMatcher", CodeBox_BracketMatcher)
 CodeBox.RegisterPlugin("ContextMenu", CodeBox_ContextMenu)
+CodeBox.RegisterPlugin("INIEditor", CodeBox_INIEditor)
 
 ; ==============================================================================
 ; DEMONSTRATION SHOWCASE GUI
@@ -73,6 +75,8 @@ Showcase() {
         guiObj.ShowTooltips := !guiObj.ShowTooltips,
         MyMenu.ToggleCheck(ItemName)
     ))
+
+    toolsMenu.Add("Show Active Hotkeys", (*) => ShowHotkeyHelper(box))
 
     mainMenu.Add("&File", fileMenu)
     mainMenu.Add("&Edit", editMenu)
@@ -323,10 +327,18 @@ GetExampleText(lang) {
         return "# Python Example`ndef test():`n    print(`"Python is fun`")`n    return True`n`nclass Box:`n    def __init__(self):`n        self.name = `"CodeBox`"`n        print `"Legacy Print!`" # Error`n        pass"
     if lang == "xml"
         return "`n<Window xmlns=`"http://example.com`">`n    <Grid Background=`"White`">`n        <Button Content=`"Click Me`" />`n    </Grid>`n</Window>"
+    if lang == "html"
+        return "<!DOCTYPE html>`n<html>`n<head>`n    <title>CodeBox Example</title>`n</head>`n<body>`n    <!-- Hello World -->`n    <div class=`"container`">`n        <h1>Welcome to RichIDE!</h1>`n    </div>`n</body>`n</html>"
+    if lang == "bat"
+        return "@echo off`n:: Batch script example`nsetlocal enabledelayedexpansion`n`nset MY_VAR=CodeBox`necho Welcome to %MY_VAR%!`n`nfor %%i in (1 2 3) do (`n    echo Iteration %%i`n)`n`npause"
+    if lang == "sql"
+        return "-- SQL Example`nSELECT id, name, created_at`nFROM users`nWHERE status = 'active'`nORDER BY created_at DESC;`n`n/* Block Comment Example */`nUPDATE users SET status = 'inactive' WHERE id = 123;"
+    if lang == "ps1"
+        return "<#`nPowerShell Script Example`n#>`nparam (`n    [string]$Name = `"CodeBox`"`n)`n`nfunction Get-Greeting {`n    param([string]$target)`n    return `"Hello, $target!`"`n}`n`n$msg = Get-Greeting -target $Name`nWrite-Host $msg"
     if lang == "json"
         return "{`n    `"name`": `"CodeBox`",`n    `"version`": 3.0,`n    `"active`": true,`n    `"features`": [`n        `"Syntax`",`n        `"Themes`",`n    ]`n}"
     if lang == "ini"
-        return "; INI Example`n[Settings]`nTheme=Dark`nLanguage=AHK2"
+        return "; INI Example`n[Settings]`nTheme=Dark`nLanguage=AHK2`n`n[Editor]`nShowLineNumbers=true`nWordWrap=1`nFontSize=12`nHighlightColor=#569CD6"
     if lang == "css"
         return "/* CSS Example */`nbody {`n    background-color: #1E1E1E;`n    color: #FFFFFF;`n    margin: 0;`n}`n`n.btn:hover {`n    background-color: #007ACC;`n    color: `; /* Error */`n}"
     if lang == "csv"
@@ -336,6 +348,62 @@ GetExampleText(lang) {
     if lang == "md"
         return "# Markdown Example`n`n> This is a **robust** *blockquote*!`n`n``````ahk2`n; Code block`nMsgBox(`"Hello`")`n```````n`nHere is some ``inline code`` and a [Link](http://example.com).`n`n- List Item 1`n- List Item 2`n`n| Feature | Status |`n|---|---|`n| Parsing | Native |`n| JS | None |`n`n---"
     return "Plain text example..."
+}
+
+ShowHotkeyHelper(box) {
+    if WinExist("Hotkey Helper") {
+        WinActivate("Hotkey Helper")
+        return
+    }
+
+    hkGui := Gui("+ToolWindow +Owner" box.Gui.Hwnd, "Hotkey Helper")
+    hkGui.BackColor := "1E1E1E"
+    hkGui.SetFont("s9 cWhite", "Segoe UI")
+    
+    lv := hkGui.Add("ListView", "w380 h350 Background333333 cWhite -Multi NoSortHdr", ["Hotkey", "Action", "State"])
+    lv.ModifyCol(1, 100)
+    lv.ModifyCol(2, 180)
+    lv.ModifyCol(3, 80)
+    
+    hotkeys := [
+        { hk: "Ctrl+Shift+F", desc: "Format Code", check: (ctrl) => !(ctrl.HasProp("IsPreviewing") && ctrl.IsPreviewing) },
+        { hk: "Ctrl+Z", desc: "Undo", check: (ctrl) => (ctrl.HasProp("HistoryIndex") && ctrl.HistoryIndex > 1) },
+        { hk: "Ctrl+Y", desc: "Redo", check: (ctrl) => (ctrl.HasProp("HistoryIndex") && ctrl.HistoryIndex < (ctrl.HasProp("History") ? ctrl.History.Length : 0)) },
+        { hk: "Ctrl+F", desc: "Find", check: (ctrl) => true },
+        { hk: "Ctrl+H", desc: "Replace", check: (ctrl) => true },
+        { hk: "Ctrl+/", desc: "Toggle Line Comment", check: (ctrl) => true },
+        { hk: "Ctrl+Shift+/", desc: "Toggle Block Comment", check: (ctrl) => (ctrl.CodeBoxLang ~= "^(ahk2|ini|js|cs|cpp|c|java|php|go|rust|css|python|ruby|ps1|yaml|sql|html|xml|md)$") },
+        { hk: "Ctrl+K", desc: "Toggle Markdown View", check: (ctrl) => (ctrl.CodeBoxLang == "md") },
+        { hk: "Ctrl+M", desc: "Fold Current", check: (ctrl) => true },
+        { hk: "Ctrl+Shift+[", desc: "Fold Block", check: (ctrl) => true },
+        { hk: "Ctrl+Shift+]", desc: "Unfold Block", check: (ctrl) => true },
+        { hk: "Ctrl+1...0", desc: "Fold All Level 1-10", check: (ctrl) => true },
+        { hk: "F3", desc: "Find Next", check: (ctrl) => (ctrl.HasProp("FindState") && ctrl.FindState.Query != "") },
+        { hk: "Shift+F3", desc: "Find Prev", check: (ctrl) => (ctrl.HasProp("FindState") && ctrl.FindState.Query != "") },
+        { hk: "Tab", desc: "Indent", check: (ctrl) => true },
+        { hk: "Shift+Tab", desc: "Unindent", check: (ctrl) => true }
+    ]
+    
+    for item in hotkeys {
+        lv.Add("", item.hk, item.desc, "Active")
+    }
+    
+    UpdateList() {
+        if !WinExist(hkGui.Hwnd) {
+            SetTimer(UpdateList, 0)
+            return
+        }
+        for i, item in hotkeys {
+            isActive := item.check.Call(box)
+            if (isActive)
+                lv.Modify(i, "", item.hk, item.desc, "Active")
+            else
+                lv.Modify(i, "", item.hk, item.desc, "Disabled")
+        }
+    }
+    
+    SetTimer(UpdateList, 200)
+    hkGui.Show("NoActivate")
 }
 
 Showcase()
