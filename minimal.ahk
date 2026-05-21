@@ -9,6 +9,7 @@
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Selection.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Scrollbars.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_LineNumbers.ahk"
+#Include "%A_ScriptDir%\lib\Plugins\CodeBox_LineHighlighter.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Folding.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_History.ahk"
 #Include "%A_ScriptDir%\lib\Plugins\CodeBox_Suggest.ahk"
@@ -28,6 +29,7 @@ CodeBox.RegisterPlugin("Theming", CodeBox_Theming)
 CodeBox.RegisterPlugin("Selection", CodeBox_Selection)
 CodeBox.RegisterPlugin("Scrollbars", CodeBox_Scrollbars)
 CodeBox.RegisterPlugin("LineNumbers", CodeBox_LineNumbers)
+CodeBox.RegisterPlugin("LineHighlighter", CodeBox_LineHighlighter)
 CodeBox.RegisterPlugin("Folding", CodeBox_Folding)
 CodeBox.RegisterPlugin("History", CodeBox_History)
 CodeBox.RegisterPlugin("Suggest", CodeBox_Suggest)
