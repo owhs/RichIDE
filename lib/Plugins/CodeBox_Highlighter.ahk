@@ -432,8 +432,36 @@ class CodeBox_Highlighter {
             if (ttText != (ctrl.HasProp("HighlighterTT") ? ctrl.HighlighterTT : "")) {
                 ToolTip(ttText)
                 ctrl.HighlighterTT := ttText
+                
+                if !ctrl.HasProp("_TTChecker")
+                    ctrl._TTChecker := ObjBindMethod(this, "_CheckTooltip", ctrl)
+                    
+                if (ttText != "")
+                    SetTimer(ctrl._TTChecker, 100)
+                else
+                    SetTimer(ctrl._TTChecker, 0)
             }
         }
         return 0
+    }
+
+    static _CheckTooltip(ctrl) {
+        try {
+            if !WinActive(ctrl.Gui.Hwnd) {
+                ToolTip()
+                ctrl.HighlighterTT := ""
+                SetTimer(ctrl._TTChecker, 0)
+                return
+            }
+            MouseGetPos(,, &mHwnd, &mCtrlHwnd, 2)
+            if (mCtrlHwnd != ctrl.Hwnd) {
+                ToolTip()
+                ctrl.HighlighterTT := ""
+                SetTimer(ctrl._TTChecker, 0)
+            }
+        } catch {
+            ToolTip()
+            SetTimer(ctrl._TTChecker, 0)
+        }
     }
 }
