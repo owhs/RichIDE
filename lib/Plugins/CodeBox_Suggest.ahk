@@ -93,11 +93,28 @@ class CodeBox_Suggest {
                     ctrl.SuggestList.Move(1, 1, 248, listHeight)
                     ctrl.SuggestGui.Show("NoActivate x" sx " y" (sy + 20) " w250 h" (listHeight + 2))
                     ctrl.SuggestActive := true
+                    
+                    if !ctrl.HasProp("_SuggestChecker")
+                        ctrl._SuggestChecker := ObjBindMethod(this, "_CheckSuggest", ctrl)
+                    SetTimer(ctrl._SuggestChecker, 100)
+                    
                     return
                 }
             }
         }
         this.OnSuggestHide(ctrl)
+    }
+
+    static _CheckSuggest(ctrl) {
+        try {
+            if (!WinActive(ctrl.Gui.Hwnd) && !WinActive(ctrl.SuggestGui.Hwnd)) {
+                this.OnSuggestHide(ctrl)
+                SetTimer(ctrl._SuggestChecker, 0)
+            }
+        } catch {
+            this.OnSuggestHide(ctrl)
+            SetTimer(ctrl._SuggestChecker, 0)
+        }
     }
 
     static InitGui(ctrl) {
@@ -114,8 +131,11 @@ class CodeBox_Suggest {
     }
 
     static OnSuggestHide(ctrl) {
-        if ctrl.HasProp("SuggestGui") && ctrl.SuggestActive
+        if ctrl.HasProp("SuggestGui") && ctrl.SuggestActive {
             ctrl.SuggestGui.Hide(), ctrl.SuggestActive := false
+            if ctrl.HasProp("_SuggestChecker")
+                SetTimer(ctrl._SuggestChecker, 0)
+        }
     }
 
     static Commit(ctrl) {

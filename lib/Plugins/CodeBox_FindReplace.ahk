@@ -651,6 +651,9 @@ class CodeBox_FindReplace {
         if (!this.DlgGui || !this.ActiveCtrl || this.ActiveCtrl.Hwnd != ctrl.Hwnd)
             return
 
+        if (this.IsPreviewing)
+            return
+
         ; If highlight is disabled or search query is too short, do nothing
         ; This ensures that standard syntax highlighting remains clean and unmodified
         if (!this.LastHighlight || StrLen(this.LastSearchQuery) < 3)
@@ -795,44 +798,67 @@ class CodeBox_FindReplace {
         if !this.IsPreviewing
             return
 
-        ; Freeze drawing to avoid flickering
         SendMessage(0x000B, 0, 0, ctrl.Hwnd)
         
-        ; Save current scroll position to restore later
         pt := Buffer(8, 0)
-        SendMessage(0x04DD, 0, pt.Ptr, ctrl.Hwnd) ; EM_GETSCROLLPOS
+        SendMessage(0x04DD, 0, pt.Ptr, ctrl.Hwnd)
 
-        ; Temporarily make editable to set text cleanly
-        SendMessage(0x00CF, 0, 0, ctrl.Hwnd) ; EM_SETREADONLY = false
+        SendMessage(0x00CF, 0, 0, ctrl.Hwnd)
         
-        ; Perform replacements in memory
         replaceText := this.ReplaceEdit.Value
-        previewText := this.OriginalText
+        previewText := ""
+        replaceRanges := []
+        lastEnd := 0
         
-        loop this.SearchMatches.Length {
-            idx := this.SearchMatches.Length - A_Index + 1
-            m := this.SearchMatches[idx]
-            leftPart := SubStr(previewText, 1, m.start)
-            rightPart := SubStr(previewText, m.end + 1)
+        for m in this.SearchMatches {
+            leftPart := SubStr(this.OriginalText, lastEnd + 1, m.start - lastEnd - 1)
+            previewText .= leftPart
+            
+            replaceStart := StrLen(previewText) + 1
             formattedReplace := this.GetReplacementText(replaceText, m.matchObj)
-            previewText := leftPart . formattedReplace . rightPart
+            previewText .= formattedReplace
+            replaceEnd := StrLen(previewText)
+            
+            if (StrLen(formattedReplace) > 0)
+                replaceRanges.Push({start: replaceStart, end: replaceEnd})
+                
+            lastEnd := m.end
+        }
+        previewText .= SubStr(this.OriginalText, lastEnd + 1)
+        
+        z := 100
+        if (ctrl.HasProp("_ZoomPct"))
+            z := ctrl._ZoomPct
+            
+        textStr := StrReplace(StrReplace(previewText, "`r`n", "`n"), "`n", "`r`n")
+        SendMessage(0x000C, 0, StrPtr(textStr), ctrl.Hwnd)
+        
+        if (z != 100)
+            CodeBox._ApplyZoom(ctrl, 0)
+            
+        ctrl._ForceNextHighlight := true
+        CodeBox_Highlighter.DoHighlight(ctrl)
+        
+        if (this.OptHighlight.Value) {
+            bgColor := 0xFFFF00
+            fgColor := 0x000000
+            if (ctrl.CodeBoxTheme == "Matrix") {
+                 bgColor := 0x00FF41
+                 fgColor := 0x000000
+                }
+            else if (ctrl.CodeBoxTheme == "Hacker") {
+                bgColor := 0xFF0000
+                fgColor := 0xFFFFFF
+            }
+            
+            for r in replaceRanges {
+                CodeBox._SetSel(ctrl.Hwnd, r.start - 1, r.end)
+                CodeBox._SetFormat(ctrl.Hwnd, fgColor, false, false, 0, bgColor)
+            }
         }
         
-        ; Update editor text
-        ; Convert to CR+LF for RichEdit
-        textStr := StrReplace(StrReplace(previewText, "`r`n", "`n"), "`n", "`r`n")
-        SendMessage(0x000C, 0, StrPtr(textStr), ctrl.Hwnd) ; WM_SETTEXT
-        
-        ; Force highlight and syntax parsing on the previewed text
-        CodeBox_Highlighter.Highlight(ctrl)
-        
-        ; Make it read-only again
-        SendMessage(0x00CF, 1, 0, ctrl.Hwnd) ; EM_SETREADONLY = true
-        
-        ; Restore scroll position
-        SendMessage(0x04DE, 0, pt.Ptr, ctrl.Hwnd) ; EM_SETSCROLLPOS
-
-        ; Restore drawing
+        SendMessage(0x00CF, 1, 0, ctrl.Hwnd)
+        SendMessage(0x04DE, 0, pt.Ptr, ctrl.Hwnd)
         SendMessage(0x000B, 1, 0, ctrl.Hwnd)
         DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
     }
@@ -841,24 +867,25 @@ class CodeBox_FindReplace {
         if (!this.IsPreviewing)
             return
 
-        ; Freeze drawing
         SendMessage(0x000B, 0, 0, ctrl.Hwnd)
+        SendMessage(0x00CF, 0, 0, ctrl.Hwnd)
+        
+        z := 100
+        if (ctrl.HasProp("_ZoomPct"))
+            z := ctrl._ZoomPct
 
-        ; Make editable
-        SendMessage(0x00CF, 0, 0, ctrl.Hwnd) ; EM_SETREADONLY = false
-
-        ; Restore original text
         textStr := StrReplace(StrReplace(this.OriginalText, "`r`n", "`n"), "`n", "`r`n")
         SendMessage(0x000C, 0, StrPtr(textStr), ctrl.Hwnd)
+        
+        if (z != 100)
+            CodeBox._ApplyZoom(ctrl, 0)
 
-        ; Run highlighter
-        CodeBox_Highlighter.Highlight(ctrl)
+        ctrl._ForceNextHighlight := true
+        CodeBox_Highlighter.DoHighlight(ctrl)
 
-        ; Restore original selection and scroll position
         CodeBox._SetSelDirectional(ctrl.Hwnd, this.OriginalSelStart, this.OriginalSelEnd, this.OriginalCaretPos)
         SendMessage(0x04DE, 0, this.OriginalScrollPos.Ptr, ctrl.Hwnd)
 
-        ; Restore drawing
         SendMessage(0x000B, 1, 0, ctrl.Hwnd)
         DllCall("InvalidateRect", "Ptr", ctrl.Hwnd, "Ptr", 0, "Int", 0)
 
