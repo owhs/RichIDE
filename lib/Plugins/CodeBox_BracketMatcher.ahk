@@ -273,49 +273,44 @@ class CodeBox_BracketMatcher {
             pt := Buffer(8, 0)
             SendMessage(0x04DD, 0, pt.Ptr, hwnd) ; EM_GETSCROLLPOS
             
-            this.ApplyHighlight(ctrl, targetPos, matchPos, startSel, endSel, pt)
+            this.ApplyHighlight(ctrl, targetPos, matchPos)
         } else {
             ; No match at caret, clear any existing highlight
             this.ClearHighlight(ctrl)
         }
     }
 
-    static ApplyHighlight(ctrl, pos1, pos2, startSel, endSel, pt) {
+    static ApplyHighlight(ctrl, pos1, pos2) {
         hwnd := ctrl.Hwnd
         
-        ; Query caret index before we change the selection to format
-        caretPos := SendMessage(0x0464, 0, 0, hwnd) ; EM_GETCARETINDEX
-
-        ; Determine bracket background color based on theme
         themeName := ctrl.CodeBoxTheme
         if (themeName == "Light") {
-            bracketBg := 0xB4D6FA ; Soft light steel blue
+            bracketBg := 0xB4D6FA
         } else if (themeName == "Matrix") {
-            bracketBg := 0x008822 ; Vibrant matrix green
+            bracketBg := 0x008822
         } else if (themeName == "Hacker") {
-            bracketBg := 0x880000 ; Vibrant hacker red
+            bracketBg := 0x880000
         } else {
-            bracketBg := 0x1A5380 ; Sleek modern steel blue (VS Code style matching)
+            bracketBg := 0x1A5380
         }
 
-        SendMessage(0x000B, 0, 0, hwnd) ; Freeze window redraw
+        doc := CodeBox_Highlighter.GetITextDocument(hwnd)
+        if !doc
+            return
+
+        bgBgr := ((bracketBg & 0xFF0000) >> 16) | (bracketBg & 0x00FF00) | ((bracketBg & 0x0000FF) << 16)
+
         try {
-            ; Format first bracket
-            CodeBox._SetSel(hwnd, pos1, pos1 + 1)
-            this.SetBracketFormat(hwnd, true, bracketBg)
+            rng1 := doc.Range(pos1, pos1 + 1)
+            rng1.Font.Bold := -1
+            rng1.Font.BackColor := bgBgr
 
-            ; Format second bracket
-            CodeBox._SetSel(hwnd, pos2, pos2 + 1)
-            this.SetBracketFormat(hwnd, true, bracketBg)
+            rng2 := doc.Range(pos2, pos2 + 1)
+            rng2.Font.Bold := -1
+            rng2.Font.BackColor := bgBgr
 
-            ; Save positions so we can clear them later
             ctrl.PrevBracketPositions := [pos1, pos2]
-        } finally {
-            CodeBox._SetSelDirectional(hwnd, startSel, endSel, caretPos)
-            SendMessage(0x04DE, 0, pt.Ptr, hwnd) ; EM_SETSCROLLPOS
-
-            SendMessage(0x000B, 1, 0, hwnd) ; Re-enable window redraw
-            DllCall("RedrawWindow", "Ptr", hwnd, "Ptr", 0, "Ptr", 0, "UInt", 0x0001 | 0x0100) ; RDW_INVALIDATE | RDW_UPDATENOW
+        } catch {
         }
     }
 
@@ -330,50 +325,24 @@ class CodeBox_BracketMatcher {
         positions := ctrl.PrevBracketPositions
         ctrl.PrevBracketPositions := ""
 
-        cr := Buffer(8, 0)
-        SendMessage(0x0434, 0, cr.Ptr, hwnd)
-        startSel := NumGet(cr, 0, "Int")
-        endSel := NumGet(cr, 4, "Int")
+        doc := CodeBox_Highlighter.GetITextDocument(hwnd)
+        if !doc
+            return
 
-        ; Query caret index before we change the selection to format
-        caretPos := SendMessage(0x0464, 0, 0, hwnd) ; EM_GETCARETINDEX
+        themeC := CodeBox.Themes.Has(ctrl.CodeBoxTheme) ? CodeBox.Themes[ctrl.CodeBoxTheme] : CodeBox.Themes["Dark"]
+        bgBgr := ((themeC["Background"] & 0xFF0000) >> 16) | (themeC["Background"] & 0x00FF00) | ((themeC["Background"] & 0x0000FF) << 16)
 
-        pt := Buffer(8, 0)
-        SendMessage(0x04DD, 0, pt.Ptr, hwnd)
-
-        SendMessage(0x000B, 0, 0, hwnd)
         try {
             len := SendMessage(0x000E, 0, 0, hwnd) ; WM_GETTEXTLENGTH
             for pos in positions {
                 if (pos >= 0 && pos < len) {
-                    CodeBox._SetSel(hwnd, pos, pos + 1)
-                    this.SetBracketFormat(hwnd, false, -2) ; Revert background and bold formatting
+                    rng := doc.Range(pos, pos + 1)
+                    rng.Font.Bold := 0
+                    rng.Font.BackColor := bgBgr
                 }
             }
-        } finally {
-            CodeBox._SetSelDirectional(hwnd, startSel, endSel, caretPos)
-            SendMessage(0x04DE, 0, pt.Ptr, hwnd)
-
-            SendMessage(0x000B, 1, 0, hwnd)
-            DllCall("RedrawWindow", "Ptr", hwnd, "Ptr", 0, "Ptr", 0, "UInt", 0x0001 | 0x0100) ; RDW_INVALIDATE | RDW_UPDATENOW
+        } catch {
         }
-    }
-
-    static SetBracketFormat(hwnd, bold, backColorRGB) {
-        cf2 := Buffer(116, 0)
-        NumPut("UInt", 116, cf2, 0) ; cbSize
-        NumPut("UInt", 0x04000000 | 0x00000001, cf2, 4) ; dwMask = CFM_BACKCOLOR | CFM_BOLD
-        
-        effects := (bold ? 1 : 0)
-        if (backColorRGB == -2) {
-            effects |= 0x04000000 ; CFE_AUTOBACKCOLOR
-        } else {
-            bgBgr := ((backColorRGB & 0xFF0000) >> 16) | (backColorRGB & 0x00FF00) | ((backColorRGB & 0x0000FF) << 16)
-            NumPut("UInt", bgBgr, cf2, 96) ; crBackColor
-        }
-        NumPut("UInt", effects, cf2, 8) ; dwEffects
-        
-        SendMessage(0x0444, 1, cf2.Ptr, hwnd) ; EM_SETCHARFORMAT with SCF_SELECTION
     }
 
     static OnRegisterUI(ctrl, guiObj, &x, &y, maxW) {

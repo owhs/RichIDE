@@ -232,6 +232,26 @@ class CodeBox {
             return
 
         ctrl := this._Instances[hwnd]
+        
+        ; --- Hardened Anti-Snap for ALL Keystrokes (Backspace, Enter, etc) ---
+        cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, ctrl.Hwnd)
+        startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+        if (startSel != endSel) {
+            caretLine := SendMessage(0x0436, 0, -1, ctrl.Hwnd)
+            startSelLine := SendMessage(0x00C9, startSel, 0, ctrl.Hwnd)
+            if (caretLine == startSelLine) {
+                lastChar := CodeBox._GetTextRange(ctrl.Hwnd, endSel - 1, endSel)
+                if (lastChar == "`r" || lastChar == "`n") {
+                    delEnd := endSel - 1
+                    if (CodeBox._GetTextRange(ctrl.Hwnd, delEnd - 1, delEnd) == "`r")
+                        delEnd--
+                    CodeBox._SetSel(ctrl.Hwnd, startSel, delEnd)
+                    endSel := delEnd ; Update for subsequent logic
+                }
+            }
+        }
+        ; ---------------------------------------------------------------------
+
         if this._DebounceTimers.Has(hwnd) && (wParam == 0x10 || GetKeyState("Shift", "P")) {
             SetTimer(this._DebounceTimers[hwnd], -400)
         }
@@ -250,6 +270,17 @@ class CodeBox {
                 return 1
             }
         }
+
+            ; Fix native RichEdit bug where deleting a multi-line selection fails to remove the trailing newlines
+            if (wParam == 8 || wParam == 46) {
+                if (startSel != endSel) {
+                    if !this.Emit("OnKeyDown", ctrl, wParam) {
+                        this.Emit("PushHistory", ctrl, wParam == 8 ? "Backspace" : "Delete")
+                        this._InsertText(ctrl.Hwnd, "")
+                    }
+                    return 1
+                }
+            }
 
         if this.Emit("OnKeyDown", ctrl, wParam)
             return 1
@@ -285,6 +316,16 @@ class CodeBox {
         }
         if this._Instances.Has(hwnd) {
             ctrl := this._Instances[hwnd]
+            
+            x := lParam & 0xFFFF
+            if (x > 0x7FFF)
+                x -= 0x10000
+            y := (lParam >> 16) & 0xFFFF
+            if (y > 0x7FFF)
+                y -= 0x10000
+            pt := Buffer(8, 0), NumPut("Int", x, pt, 0), NumPut("Int", y, pt, 4)
+            ctrl._AnchorCharIdx := SendMessage(0x00D7, 0, pt.Ptr, hwnd) ; EM_CHARFROMPOS
+            
             if this._DebounceTimers.Has(hwnd) {
                 SetTimer(this._DebounceTimers[hwnd], -400)
             }
@@ -303,6 +344,76 @@ class CodeBox {
         }
         if this._Instances.Has(hwnd) {
             ctrl := this._Instances[hwnd]
+
+            ; Fix RichEdit Smart Paragraph Selection Snapping
+            cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, hwnd)
+            startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+            if (startSel != endSel) {
+                x := lParam & 0xFFFF
+                if (x > 0x7FFF)
+                    x -= 0x10000
+                y := (lParam >> 16) & 0xFFFF
+                if (y > 0x7FFF)
+                    y -= 0x10000
+                pt := Buffer(8, 0), NumPut("Int", x, pt, 0), NumPut("Int", y, pt, 4)
+                releaseIdx := SendMessage(0x00D7, 0, pt.Ptr, hwnd)
+
+                releaseLine := SendMessage(0x00C9, releaseIdx, 0, hwnd)
+                startSelLine := SendMessage(0x00C9, startSel, 0, hwnd)
+                endSelLine := SendMessage(0x00C9, endSel, 0, hwnd)
+
+                anchorIdx := ctrl.HasProp("_AnchorCharIdx") ? ctrl._AnchorCharIdx : releaseIdx
+                anchorLine := SendMessage(0x00C9, anchorIdx, 0, hwnd)
+
+                caretLine := SendMessage(0x0436, 0, -1, hwnd)
+
+                ; Defer anti-snap logic until AFTER RichEdit processes WM_LBUTTONUP
+                antiSnap() {
+                    if !DllCall("IsWindow", "Ptr", hwnd)
+                        return
+                    cr := Buffer(8, 0), SendMessage(0x0434, 0, cr.Ptr, hwnd)
+                    startSel := NumGet(cr, 0, "Int"), endSel := NumGet(cr, 4, "Int")
+                    
+                    startSelLine := SendMessage(0x00C9, startSel, 0, hwnd)
+                    endSelLine := SendMessage(0x00C9, endSel, 0, hwnd)
+                    caretLine := SendMessage(0x0436, 0, -1, hwnd)
+                    
+                    getLineEnd(lIdx) {
+                        lStart := SendMessage(0x00BB, lIdx, 0, hwnd)
+                        lEnd := lStart + SendMessage(0x00C1, lStart, 0, hwnd)
+                        while (lEnd > lStart) {
+                            ch := CodeBox._GetTextRange(hwnd, lEnd - 1, lEnd)
+                            if (ch == "`r" || ch == "`n")
+                                lEnd--
+                            else
+                                break
+                        }
+                        return lEnd
+                    }
+                    
+                    newStart := startSel
+                    newEnd := endSel
+
+                    if (caretLine == startSelLine) {
+                        if (startSelLine > releaseLine)
+                            newStart := getLineEnd(releaseLine)
+                        
+                        lineStart := SendMessage(0x00BB, endSelLine, 0, hwnd)
+                        if (endSel == lineStart && endSelLine > 0)
+                            newEnd := getLineEnd(endSelLine - 1)
+                        else if (endSelLine > anchorLine)
+                            newEnd := getLineEnd(anchorLine)
+                        
+                        if (newStart != startSel || newEnd != endSel)
+                            CodeBox._SetSelDirectional(hwnd, newStart, newEnd, newStart)
+                    }
+                }
+                SetTimer(antiSnap, -10)
+            }
+
+            if this._DebounceTimers.Has(hwnd) {
+                SetTimer(this._DebounceTimers[hwnd], -400)
+            }
             if this.Emit("OnLButtonUp", ctrl, wParam, lParam, false, hwnd)
                 return 1
             this._Fire(ctrl, "SelectEnd")
@@ -694,18 +805,15 @@ class CodeBox {
     }
 
     static _SetSel(hwnd, start, end) {
-        cr := Buffer(8, 0), NumPut("Int", start, cr, 0), NumPut("Int", end, cr, 4)
-        SendMessage(0x0437, 0, cr.Ptr, hwnd)
+        SendMessage(0x00B1, start, end, hwnd)
     }
 
     static _SetSelDirectional(hwnd, startSel, endSel, caretPos) {
-        cr := Buffer(8, 0)
         if (caretPos == startSel) {
-            NumPut("Int", endSel, cr, 0), NumPut("Int", startSel, cr, 4)
+            SendMessage(0x00B1, endSel, startSel, hwnd)
         } else {
-            NumPut("Int", startSel, cr, 0), NumPut("Int", endSel, cr, 4)
+            SendMessage(0x00B1, startSel, endSel, hwnd)
         }
-        SendMessage(0x0437, 0, cr.Ptr, hwnd)
     }
 
     static _SetFormat(hwnd, colorRGB, isDefault := false, bold := false, underline := 0, backColorRGB := -1) {

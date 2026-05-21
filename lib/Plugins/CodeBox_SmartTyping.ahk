@@ -85,6 +85,18 @@ class CodeBox_SmartTyping {
             lineStart := SendMessage(0x00BB, SendMessage(0x0436, 0, startSel, ctrl.Hwnd), 0, ctrl.Hwnd)
             lineText := CodeBox._GetTextRange(ctrl.Hwnd, lineStart, startSel)
             RegExMatch(lineText, "^\s*", &m), insertStr := "`n" m[0]
+            
+            lineIdx := SendMessage(0x0436, 0, startSel, ctrl.Hwnd)
+            if (lineIdx > 0) {
+                prevLineStart := SendMessage(0x00BB, lineIdx - 1, 0, ctrl.Hwnd)
+                prevLineLen := SendMessage(0x00C1, prevLineStart, 0, ctrl.Hwnd)
+                prevLineText := CodeBox._GetTextRange(ctrl.Hwnd, prevLineStart, prevLineStart + prevLineLen)
+                
+                if RegExMatch(prevLineText, "i)^\s*(if|else|loop|while|for|try|catch|finally)\b[^{]*$") && !RegExMatch(lineText, "^\s*\{") {
+                    RegExMatch(prevLineText, "^\s*", &prevM)
+                    insertStr := "`n" prevM[0]
+                }
+            }
 
             if RegExMatch(lineText, "[\{\[\(:]\s*$") || RegExMatch(lineText, "i)^\s*(if|else|loop|while|for|try|catch|finally)\b[^{]*$") {
                 insertStr .= "    "
